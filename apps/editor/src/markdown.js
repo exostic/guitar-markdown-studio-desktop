@@ -81,7 +81,8 @@ export function parseFrontMatter(source) {
 }
 
 function renderHeader(data) {
-  const { title, artist, logo, qr, ...rest } = data;
+  const { title, artist, logo, qr, "logo-position": logoPosition, ...rest } = data;
+  const logoPositionClass = logoPosition === "left" ? " doc-header-top-left" : "";
   const pills = Object.entries(rest)
     .filter(([, value]) => value)
     .map(([key, value]) => {
@@ -95,7 +96,7 @@ function renderHeader(data) {
     .join("");
   if (!title && !artist && !pills) return "";
   return `<header class="doc-header">
-    <div class="doc-header-top">${logo ? `<img class="doc-logo" src="${escapeHtml(logo)}" alt="" />` : ""}</div>
+    <div class="doc-header-top${logoPositionClass}">${logo ? `<img class="doc-logo" src="${escapeHtml(logo)}" alt="" />` : ""}</div>
     <div class="doc-title-block">
       ${title ? `<h1 class="doc-title">${escapeHtml(title)}</h1>` : ""}
       ${artist ? `<p class="doc-artist">${escapeHtml(artist)}</p>` : ""}

@@ -33,12 +33,14 @@ time: 3/4
 capo: 0
 tuning: Standard
 logo: https://raw.githubusercontent.com/<user>/<repo>/main/assets/logo.png
+logo-position: left
 qr: false
 ---
 ```
 
 - `title`, `artist` et les autres champs (`difficulty`, `tempo`, `time`, `capo`, `tuning`, …) s'affichent en pastilles sous le titre.
 - `logo` : remplace le logo par défaut de l'en-tête par une image externe (URL). Sans ce champ, aucun logo ne s'affiche.
+- `logo-position` : `left` pour aligner le logo à gauche, sinon centré par défaut.
 - `qr` : mettre `qr: false` pour masquer le QR code d'en-tête (par défaut affiché en mode Livre/Poster, absent en mode Web).
 
 ## Tablatures
