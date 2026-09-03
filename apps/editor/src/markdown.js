@@ -2,7 +2,6 @@ import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
 import qrcode from "qrcode-generator";
 import { parseAsciiTab, parseChordBlock, parseRhythmPattern, parseChordGrid, parseScale } from "@gms/guitar-markdown";
-import logoUrl from "./assets/logo.png";
 
 let blockCounter = 0;
 let currentTimeSignature = "4/4";
@@ -28,6 +27,32 @@ function formatChordLabel(cell) {
   const match = cell.match(/^([A-G][#b]?)(.*)$/);
   if (!match || !match[2] || match[2] === "m") return escapeHtml(cell);
   return `${escapeHtml(match[1])}<sub class="chord-ext">${escapeHtml(match[2])}</sub>`;
+}
+
+const CHORD_TOKEN = /^[A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d{0,2}(?:\/[A-G][#b]?)?$/i;
+
+function isChordLine(line) {
+  const tokens = line.trim().split(/\s+/).filter(Boolean);
+  return tokens.length > 0 && tokens.every(token => CHORD_TOKEN.test(token));
+}
+
+// Converts a chord line sitting above a lyric line (chords column-aligned over
+// the syllable they're played on) into this renderer's native inline syntax
+// ("[Bm]On a dark..."), so both source styles reuse the same `.inline-chord` output.
+function mergeChordAndLyricLine(chordLine, lyricLine) {
+  const chords = [...chordLine.matchAll(/\S+/g)];
+  if (!chords.length) return lyricLine;
+  const words = [...lyricLine.matchAll(/\S+/g)];
+  const insertions = chords
+    .map(chord => {
+      const target = words.find(word => word.index >= chord.index) ?? words[words.length - 1];
+      return { pos: target ? target.index : lyricLine.length, text: chord[0] };
+    })
+    .sort((a, b) => b.pos - a.pos);
+  return insertions.reduce(
+    (result, { pos, text }) => result.slice(0, pos) + `[${text}]` + result.slice(pos),
+    lyricLine,
+  );
 }
 
 function renderGridCell(cell) {
@@ -56,7 +81,7 @@ export function parseFrontMatter(source) {
 }
 
 function renderHeader(data) {
-  const { title, artist, ...rest } = data;
+  const { title, artist, logo, qr, ...rest } = data;
   const pills = Object.entries(rest)
     .filter(([, value]) => value)
     .map(([key, value]) => {
@@ -70,7 +95,7 @@ function renderHeader(data) {
     .join("");
   if (!title && !artist && !pills) return "";
   return `<header class="doc-header">
-    <img class="doc-logo" src="${logoUrl}" alt="Rock'n Go" />
+    <div class="doc-header-top">${logo ? `<img class="doc-logo" src="${escapeHtml(logo)}" alt="" />` : ""}</div>
     <div class="doc-title-block">
       ${title ? `<h1 class="doc-title">${escapeHtml(title)}</h1>` : ""}
       ${artist ? `<p class="doc-artist">${escapeHtml(artist)}</p>` : ""}
@@ -158,9 +183,9 @@ md.renderer.rules.fence = (tokens, index, options, env, self) => {
         .map((group, index) => {
           const strokesHtml = group
             .map((stroke, strokeIndex) => {
-              const label = stroke.direction === "down" ? "B" : "H";
-              const cls = `stroke stroke-${stroke.direction}${stroke.ghost ? " ghost" : ""}`;
-              const strokeHtml = `<span class="${cls}">${label}</span>`;
+              const strokeHtml = stroke.rest
+                ? `<span class="stroke stroke-rest"></span>`
+                : `<span class="stroke stroke-${stroke.direction}${stroke.ghost ? " ghost" : ""}">${stroke.direction === "down" ? "B" : "H"}</span>`;
               if (strokeIndex !== 0) return strokeHtml;
               return `<span class="rhythm-first">${strokeHtml}<span class="beat-number">${index + 1}</span></span>`;
             })
@@ -182,8 +207,19 @@ md.renderer.rules.fence = (tokens, index, options, env, self) => {
           .map(verse => verse.trim())
           .filter(Boolean)
           .map(verse => {
-            const linesHtml = verse
-              .split(/\r?\n/)
+            const rawLines = verse.split(/\r?\n/);
+            const mergedLines = [];
+            for (let i = 0; i < rawLines.length; i++) {
+              const line = rawLines[i];
+              const next = rawLines[i + 1];
+              if (isChordLine(line) && next !== undefined && !isChordLine(next)) {
+                mergedLines.push(mergeChordAndLyricLine(line, next));
+                i++;
+              } else {
+                mergedLines.push(line);
+              }
+            }
+            const linesHtml = mergedLines
               .map(line => {
                 const html = escapeHtml(line).replace(
                   /\[([^\]]+)\]/g,

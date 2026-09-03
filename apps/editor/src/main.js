@@ -6,8 +6,11 @@ import { renderMarkdown, parseFrontMatter, renderQrSvg } from "./markdown.js";
 import { renderTablatureSvg, renderScoreSvg } from "@gms/renderer-vexflow";
 import { renderChordDiagrams } from "@gms/renderer-svguitar";
 import { renderFretboardScale } from "@gms/renderer-fretboard";
+import LZString from "lz-string";
 import { Bravura } from "../../../node_modules/vexflow/build/esm/src/fonts/bravura.js";
 import { Academico } from "../../../node_modules/vexflow/build/esm/src/fonts/academico.js";
+
+const { compressToEncodedURIComponent, decompressFromEncodedURIComponent } = LZString;
 
 const STORAGE_KEY = "gms:vexflow:document";
 const EDITOR_WIDTH_KEY = "gms:editor-width";
@@ -696,24 +699,25 @@ function update() {
     const result = renderMarkdown(editor.value);
     preview.innerHTML = result.html;
     preview.classList.toggle("web-mode", webMode);
+    const { data } = parseFrontMatter(editor.value);
     // Book/Poster are print-oriented and not clickable — a QR to the same
     // document's Web view lets a reader jump straight to the live version
     // from a printed page. Web mode doesn't need it: it's already that view.
-    const headerEl = preview.querySelector(".doc-header");
-    if (!webMode && headerEl) {
+    // Front matter `qr: false` opts out entirely (e.g. for private/local docs).
+    const headerTopEl = preview.querySelector(".doc-header-top");
+    if (!webMode && headerTopEl && data.qr !== "false") {
       const webUrl = buildHeaderQrUrl();
       const qrSvg = renderQrSvg(webUrl);
       // A too-long document with no known hosted URL overflows what a QR
       // code can hold — renderQrSvg returns "" in that case; skip quietly
       // rather than show a broken code.
       if (qrSvg) {
-        headerEl.insertAdjacentHTML(
+        headerTopEl.insertAdjacentHTML(
           "beforeend",
           `<a class="doc-header-qr" href="${escapeHtml(webUrl)}" target="_blank" rel="noopener noreferrer" title="Ouvrir la version web"><span class="doc-header-qr-code">${qrSvg}</span><span class="doc-header-qr-label">Version web</span></a>`,
         );
       }
     }
-    const { data } = parseFrontMatter(editor.value);
     document.title = data.title ? slugify(data.title) : "Guitar Markdown Studio";
     applyColumnSections();
     wrapZoomSections();
@@ -933,14 +937,14 @@ function currentModeToken() {
 }
 
 function toBase64(text) {
-  const bytes = new TextEncoder().encode(text);
-  let binary = "";
-  bytes.forEach(byte => { binary += String.fromCharCode(byte); });
-  return btoa(binary);
+  return compressToEncodedURIComponent(text);
 }
 
-function fromBase64(base64) {
-  const binary = atob(base64);
+function fromBase64(doc) {
+  const decompressed = decompressFromEncodedURIComponent(doc);
+  if (decompressed !== null) return decompressed;
+  // Links shared before compression was added encoded plain base64 — keep those working.
+  const binary = atob(doc);
   const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }

@@ -448,7 +448,7 @@ button:hover,
     padding-top: 0;
   }
   .course-page.web-mode .doc-logo {
-    width: 120px;
+    width: 70px;
   }
 }
 .landscape-columns {
@@ -573,7 +573,6 @@ button:hover,
   color: #332466;
 }
 .doc-header {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -584,14 +583,20 @@ button:hover,
   border-bottom: 3px solid #d8c8ff;
   break-inside: avoid;
 }
+.doc-header-top {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.doc-header-top:empty {
+  display: none;
+}
 .doc-header-qr {
-  position: absolute;
-  top: 0;
-  right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.15rem;
+  margin-left: auto;
   color: #6b7280;
   text-decoration: none;
 }
@@ -614,9 +619,9 @@ button:hover,
   border-radius: 8px;
 }
 .doc-logo {
-  width: 170px;
+  width: 130px;
   height: auto;
-  margin-bottom: 0.5rem;
+  flex-shrink: 0;
 }
 .doc-title-block {
   min-width: 0;
@@ -773,7 +778,7 @@ button:hover,
   height: 100%;
 }
 .split-divider line {
-  stroke: #332466;
+  stroke: #e4d9ff;
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
@@ -786,12 +791,12 @@ button:hover,
 .split-first {
   top: 0.3rem;
   left: 0.4rem;
-  font-size: calc(1rem * var(--grid-scale));
+  font-size: calc(1.3rem * var(--grid-scale));
 }
 .split-second {
   bottom: 0.3rem;
   right: 0.4rem;
-  font-size: calc(1.6rem * var(--grid-scale));
+  font-size: calc(1.3rem * var(--grid-scale));
 }
 .chord-ext {
   font-size: 0.6em;
@@ -811,7 +816,7 @@ button:hover,
   display: flex;
   flex-wrap: nowrap;
   justify-content: center;
-  gap: calc(1.6rem * var(--rhythm-scale));
+  gap: calc(0.5rem * var(--rhythm-scale));
   padding: calc(1.4rem * var(--rhythm-scale)) calc(1rem * var(--rhythm-scale));
   background: #f7f7fb;
   border-radius: 9px;
@@ -842,6 +847,10 @@ button:hover,
 .stroke.ghost {
   color: #c7c7d6;
   font-weight: 650;
+}
+.stroke.stroke-rest {
+  display: inline-block;
+  width: 0.65em;
 }
 .beat-number {
   font-size: calc(0.95rem * var(--rhythm-scale));
@@ -929,7 +938,7 @@ pre {
     flex-direction: column;
   }
   .doc-logo {
-    width: 120px;
+    width: 70px;
   }
 }
 @media print {

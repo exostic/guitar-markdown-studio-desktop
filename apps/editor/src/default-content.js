@@ -1,5 +1,6 @@
 export const DEFAULT_MARKDOWN = `---
 title: Voyage en accords
+logo: https://raw.githubusercontent.com/jgaNet/guitar-markdown-studio-desktop/main/assets/logo.png
 artist: Morceau pédagogique original
 difficulty: Débutant
 tempo: 76 BPM

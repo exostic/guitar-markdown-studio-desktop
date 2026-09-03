@@ -12,6 +12,16 @@ test("parse un motif rythmique en temps et frappes", () => {
   assert.deepEqual(pattern.groups[1][1], { direction: "up", ghost: true });
 });
 
+test("parse un silence dans un motif", () => {
+  const pattern = parseRhythmPattern("B - H | - B");
+  assert.deepEqual(pattern.groups[0], [
+    { direction: "down", ghost: false },
+    { rest: true },
+    { direction: "up", ghost: false },
+  ]);
+  assert.deepEqual(pattern.groups[1][0], { rest: true });
+});
+
 test("rejette une frappe invalide", () => {
   assert.throws(() => parseRhythmPattern("B X | B H"), /Frappe invalide/);
 });

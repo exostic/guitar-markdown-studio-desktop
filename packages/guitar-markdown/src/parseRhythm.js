@@ -1,6 +1,9 @@
 function parseStroke(token) {
+  if (token === "-") {
+    return { rest: true };
+  }
   if (!/^[bh]$/i.test(token)) {
-    throw new Error(`Frappe invalide « ${token} » : utilisez B (bas) ou H (haut). Minuscule = frappe fantôme.`);
+    throw new Error(`Frappe invalide « ${token} » : utilisez B (bas), H (haut) ou - (silence). Minuscule = frappe fantôme.`);
   }
   return {
     direction: token.toLowerCase() === "b" ? "down" : "up",

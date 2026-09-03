@@ -21,6 +21,26 @@ npm run dev
 
 Ouvrir ensuite l'adresse indiquée par Vite, généralement `http://localhost:5173`.
 
+## Métadonnées (front matter)
+
+```markdown
+---
+title: Amazing Grace
+artist: Traditionnel
+difficulty: Débutant
+tempo: 70 BPM
+time: 3/4
+capo: 0
+tuning: Standard
+logo: https://raw.githubusercontent.com/<user>/<repo>/main/assets/logo.png
+qr: false
+---
+```
+
+- `title`, `artist` et les autres champs (`difficulty`, `tempo`, `time`, `capo`, `tuning`, …) s'affichent en pastilles sous le titre.
+- `logo` : remplace le logo par défaut de l'en-tête par une image externe (URL). Sans ce champ, aucun logo ne s'affiche.
+- `qr` : mettre `qr: false` pour masquer le QR code d'en-tête (par défaut affiché en mode Livre/Poster, absent en mode Web).
+
 ## Tablatures
 
 ````markdown
@@ -51,6 +71,8 @@ B|--------------8b10------|
 - `~` : vibrato
 - `x` : note étouffée
 
+Le bloc `partition` accepte exactement la même syntaxe ASCII que `tab`, mais affiche une portée de notation musicale (VexFlow) au lieu d'une tablature.
+
 ## Diagrammes d'accords
 
 ````markdown
@@ -64,22 +86,89 @@ D  xx0232
 
 Les six caractères représentent les cordes de la plus grave à la plus aiguë. `x` signifie corde muette et `0` corde à vide.
 
+## Diagramme de gamme (manche)
+
+````markdown
+```scale
+frets: 0-12
+e: 0|3|[5,A]|8|10|12
+B: 1|3|[5]|8|10
+```
+````
+
+- `frets: min-max` : plage de frettes affichée (déduite automatiquement si absente).
+- Une ligne par corde (`e`, `B`, `G`, `D`, `A`, `E`), notes séparées par `|`.
+- `12` : frette simple. `12,A` : frette avec une étiquette (ex. le nom de la note). `[12]` ou `[12,A]` : frette surlignée.
+
 ## Autres blocs
+
+### Rythmique
 
 ````markdown
 ```rhythm
-Comptage : 1 & 2 & 3 & 4 &
-Mouvement: ↓   ↓ ↑   ↑ ↓ ↑
+B H | B h | H B | h B
 ```
+````
 
+Chaque temps séparé par `|` regroupe des frappes : `B` (bas), `H` (haut), minuscule = frappe fantôme, `-` = silence (le temps est compté mais rien n'est joué).
+
+### Grille d'accords
+
+````markdown
 ```grid
-| Em | C | G | D |
+| Em | C | G/B | D |
 ```
+````
 
+Une cellule au format `Accord/Basse` (ex. `G/B`) s'affiche coupée en diagonale, accord en haut, note de basse en bas.
+
+### Paroles et accords
+
+````markdown
 ```song
 [Em]Texte avec les [C]accords
 ```
 ````
+
+Deux syntaxes sont acceptées, y compris mélangées dans le même bloc :
+
+- **Accords en ligne**, juste avant la syllabe : `[Em]Texte avec les [C]accords`.
+- **Accords sur leur propre ligne**, alignés en colonne au-dessus des paroles :
+
+  ````markdown
+  ```song
+  Bm                         F#7
+  On a dark desert highway   Cool wind in my hair
+  ```
+  ````
+
+  Chaque accord est automatiquement rattaché au mot des paroles le plus proche de sa position.
+
+Une ligne vide sépare les couplets. Une ligne `---` seule sépare les colonnes.
+
+## Mise en page
+
+Blocs sans contenu, à utiliser seuls sur leur propre ligne :
+
+- ` ```pagebreak ``` ` : saut de page.
+- ` ```columnbreak ``` ` : saut de colonne (dans une mise en page à colonnes).
+- ` ```landscapebreak ``` ` : saut de page en orientation paysage.
+- ` ```columns ``` ` … ` ```column ``` ` … ` ```endcolumns ``` ` : ouvre une section à colonnes, `column` sépare chaque colonne, `endcolumns` referme la section.
+- ` ```zoom 0.8 ``` ` … ` ```endzoom ``` ` : réduit (ou agrandit) l'échelle du contenu entre les deux marqueurs. Le facteur (`0.1` à `3`) est optionnel, `0.8` par défaut.
+
+## Images, vidéos et audio
+
+Les images et liens Markdown standards fonctionnent tels quels :
+
+```markdown
+![Description](https://exemple.com/photo.jpg)
+
+[Voir la vidéo](https://youtu.be/XXXXXXXXXXX)
+[Écouter](https://exemple.com/audio.mp3)
+```
+
+- En mode Web, un lien YouTube ou vers un fichier audio (`.mp3`, `.wav`, `.ogg`, …) s'affiche automatiquement avec un lecteur intégré au lieu d'un simple lien.
+- En mode Livre/Poster (impression), chaque lien s'affiche à la place sous forme de QR code (utile pour scanner un lien depuis une page imprimée).
 
 ## Construire et exporter un PDF
 
