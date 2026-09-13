@@ -38,7 +38,14 @@ const PAGE_FIT_MIN_SCALE = 0.35;
 const RHYTHM_FIT_MIN_SCALE = 0.4;
 const GRID_FIT_MIN_SCALE = 0.45;
 const app = document.querySelector("#app");
-const saved = localStorage.getItem(STORAGE_KEY) ?? DEFAULT_MARKDOWN;
+// The working document lives in sessionStorage so it is scoped to one tab:
+// a reload keeps it, but a new tab starts from the example (or from the
+// ?doc= / ?b64= / ?src= link that opened it) instead of whatever another tab
+// last rendered. Earlier builds kept it in localStorage — read that once so
+// an open draft is not lost by the upgrade, then drop it.
+const legacySaved = localStorage.getItem(STORAGE_KEY);
+if (legacySaved !== null) localStorage.removeItem(STORAGE_KEY);
+const saved = sessionStorage.getItem(STORAGE_KEY) ?? legacySaved ?? DEFAULT_MARKDOWN;
 let currentFilePath = null;
 // The URL the current document was loaded from via ?src=, if any — reused
 // by the header QR code so it can link to that (short) address instead of
@@ -739,7 +746,7 @@ function update() {
     fitChordGrids();
     if (!webMode) applyZoomScale();
     fitBookPageToWidth();
-    localStorage.setItem(STORAGE_KEY, editor.value);
+    sessionStorage.setItem(STORAGE_KEY, editor.value);
     status.textContent = "Sauvegardé";
   } catch (error) {
     status.textContent = "Erreur";
