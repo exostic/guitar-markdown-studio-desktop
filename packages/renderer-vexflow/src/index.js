@@ -144,8 +144,31 @@ function measureClefOverhead(makeStave) {
   return withClef.getNoteStartX() - bareNoteStartX;
 }
 
-function computeMeasureWidths(measureWidth, count, firstMeasureOverhead) {
-  return Array.from({ length: count }, (_, index) => (index === 0 ? measureWidth + firstMeasureOverhead : measureWidth));
+// Horizontal room a single note event needs so that dense measures (runs of
+// sixteenth notes, long licks written as one bar…) are not squeezed until the
+// notes spill past the end of the stave. Tuned so an ordinary bar of eight
+// events still fits the base measure width exactly and keeps the usual
+// measures-per-row layout; only busier bars grow.
+const MIN_EVENT_WIDTH = 24;
+const MEASURE_PADDING = 24;
+
+export function measureNaturalWidth(measure, measureWidth) {
+  return Math.max(measureWidth, MEASURE_PADDING + measure.events.length * MIN_EVENT_WIDTH);
+}
+
+function computeMeasureWidths(measures, measureWidth, firstMeasureOverhead) {
+  return measures.map((measure, index) => measureNaturalWidth(measure, measureWidth) + (index === 0 ? firstMeasureOverhead : 0));
+}
+
+// Every row's canvas is at least as wide as a full row of base-width measures
+// (options.measuresPerRow of them), so a shorter last row is not scaled up by
+// the CSS max-width fit and its notation stays the same size as fuller rows.
+// A row holding wider-than-base measures simply extends beyond that and is
+// scaled down to fit, like any other overflowing row.
+function rowCanvasWidth(widths, options, measureWidth, clefOverhead) {
+  const contentWidth = widths.reduce((sum, width) => sum + width, 0);
+  const fullRowWidth = (options.measuresPerRow ?? widths.length) * measureWidth + clefOverhead;
+  return Math.max(contentWidth, fullRowWidth);
 }
 
 // Wraps each measure's drawing in a <g data-measure="…"> with a transparent
@@ -173,12 +196,8 @@ function renderRow(container, measures, options) {
   const height = options.height;
   const { numBeats, beatValue } = parseTimeSignature(options.timeSignature);
   const clefOverhead = measureClefOverhead(() => new TabStave(0, 0, measureWidth, { spaceAboveStaffLn: 2 }));
-  // Size the canvas for a full row (options.measuresPerRow), not just this
-  // row's actual measure count — otherwise a shorter last row has a smaller
-  // natural SVG width and CSS max-width scaling makes its notation look
-  // bigger than the other, fuller rows.
-  const widths = computeMeasureWidths(measureWidth, options.measuresPerRow ?? measures.length, clefOverhead);
-  const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+  const widths = computeMeasureWidths(measures, measureWidth, clefOverhead);
+  const totalWidth = rowCanvasWidth(widths, options, measureWidth, clefOverhead);
 
   const renderer = new Renderer(container, Renderer.Backends.SVG);
   renderer.resize(totalWidth, height);
@@ -236,9 +255,8 @@ function renderScoreRow(container, measures, options) {
   const tabHeight = options.height;
   const { numBeats, beatValue } = parseTimeSignature(options.timeSignature);
   const clefOverhead = measureScoreClefOverhead(measureWidth, numBeats, beatValue);
-  // Same fixed-canvas-width reasoning as renderRow — see comment there.
-  const widths = computeMeasureWidths(measureWidth, options.measuresPerRow ?? measures.length, clefOverhead);
-  const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+  const widths = computeMeasureWidths(measures, measureWidth, clefOverhead);
+  const totalWidth = rowCanvasWidth(widths, options, measureWidth, clefOverhead);
 
   const renderer = new Renderer(container, Renderer.Backends.SVG);
   renderer.resize(totalWidth, notationHeight + tabHeight);
@@ -305,15 +323,38 @@ function renderScoreRow(container, measures, options) {
   shrinkSvgToContent(container);
 }
 
+// Packs measures into rows by width rather than by a fixed count: a row holds
+// measuresPerRow base-width measures, and a dense measure that needs more room
+// takes the space of several ordinary ones (or a whole row on its own).
+export function packMeasureRows(measures, measureWidth, measuresPerRow) {
+  const rowBudget = Math.max(1, measuresPerRow) * measureWidth;
+  const rows = [];
+  let row = [];
+  let rowWidth = 0;
+  for (const measure of measures) {
+    const width = measureNaturalWidth(measure, measureWidth);
+    if (row.length && rowWidth + width > rowBudget) {
+      rows.push(row);
+      row = [];
+      rowWidth = 0;
+    }
+    row.push(measure);
+    rowWidth += width;
+  }
+  if (row.length) rows.push(row);
+  return rows;
+}
+
 function renderMeasureRows(ast, target, options, className, drawRow) {
   target.replaceChildren();
   target.classList.add(className);
 
-  for (let start = 0; start < ast.measures.length; start += options.measuresPerRow) {
-    const rowMeasures = ast.measures.slice(start, start + options.measuresPerRow);
+  const rows = packMeasureRows(ast.measures, options.measureWidth, options.measuresPerRow);
+  let start = 0;
+  rows.forEach((rowMeasures, rowIndex) => {
     const rowHost = document.createElement("div");
     rowHost.className = className === "vex-tab-score" ? "vex-tab-row" : "vex-score-row";
-    rowHost.dataset.row = String(start / options.measuresPerRow + 1);
+    rowHost.dataset.row = String(rowIndex + 1);
     target.append(rowHost);
     try {
       drawRow(rowHost, rowMeasures, options);
@@ -321,7 +362,8 @@ function renderMeasureRows(ast, target, options, className, drawRow) {
       rowHost.classList.add("render-error");
       rowHost.textContent = `Mesures ${start + 1}–${start + rowMeasures.length} : ${error.message}`;
     }
-  }
+    start += rowMeasures.length;
+  });
 
   return target;
 }
