@@ -1,6 +1,6 @@
 ---
 title: Amazing Grace
-logo: https://raw.githubusercontent.com/jgaNet/guitar-markdown-studio-desktop/main/assets/logo.png
+logo: https://raw.githubusercontent.com/exostic/guitar-markdown-studio-desktop/main/assets/logo.png
 artist: Traditionnel (paroles John Newton, 1779 - domaine public)
 difficulty: Débutant
 tempo: 70 BPM
