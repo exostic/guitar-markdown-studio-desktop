@@ -12,7 +12,7 @@ function createWindow() {
     minWidth: 980,
     minHeight: 640,
     title: 'Guitar Markdown Studio',
-    backgroundColor: '#f5f2ea',
+    backgroundColor: '#0b012e',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

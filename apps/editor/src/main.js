@@ -1,6 +1,8 @@
 import "./style.css";
 import styleCssText from "./style.css?raw";
 import logoUrl from "./assets/logo.png";
+import brandMarkUrl from "./assets/exostic-mark.svg";
+import interFontUrl from "./assets/fonts/inter-latin-wght-normal.woff2?url";
 import { DEFAULT_MARKDOWN } from "./default-content.js";
 import { renderMarkdown, parseFrontMatter, renderQrSvg } from "./markdown.js";
 import { renderTablatureSvg, renderScoreSvg } from "@gms/renderer-vexflow";
@@ -54,19 +56,28 @@ let toolbarOpen = false;
 app.innerHTML = `
 <main class="app-shell">
   <header class="topbar">
-    <div><h1>Guitar Markdown Studio</h1><p>Markdown → AST → SVG VexFlow / SVGuitar</p></div>
+    <div class="brand">
+      <img class="brand-mark" src="${brandMarkUrl}" alt="" width="34" height="34" />
+      <div><h1>Guitar Markdown Studio</h1><p>Markdown → AST → SVG VexFlow / SVGuitar</p></div>
+    </div>
     <div class="actions">
-      <button id="open-md">Ouvrir</button>
       <span id="status">Prêt</span>
-      <label class="button browser-import">Importer<input id="import-file" type="file" accept=".md,.markdown" hidden></label>
-      <button id="download-md">Enregistrer .md</button>
-      <button id="reset">Exemple</button>
-      <button id="share-btn" type="button">Partager</button>
-      <button id="view-only-btn" type="button">Aperçu client</button>
+      <div class="actions-group">
+        <button id="open-md">Ouvrir</button>
+        <label class="button browser-import">Importer<input id="import-file" type="file" accept=".md,.markdown" hidden></label>
+        <button id="download-md">Enregistrer .md</button>
+        <button id="reset">Exemple</button>
+      </div>
+      <span class="actions-divider"></span>
+      <div class="actions-group">
+        <button id="share-btn" type="button">Partager</button>
+        <button id="view-only-btn" type="button">Aperçu client</button>
+      </div>
       <button id="print" class="primary">Imprimer / PDF</button>
     </div>
   </header>
   <nav class="insertbar">
+    <span class="insert-label">Insérer</span>
     <div class="insert-group">
       <button data-insert="tab">Tablature</button>
       <button data-insert="partition">Partition</button>
@@ -1083,16 +1094,37 @@ const NOTATION_FONT_FACES = `
 @font-face { font-family: "Academico"; src: url("${Academico}") format("woff2"); }
 `;
 
+async function inlineInterFontFace() {
+  // style.css declares Inter Variable with a relative url() that only resolves
+  // inside the running app; re-declare it after the stylesheet with the font
+  // embedded as a data URI so the standalone export keeps the same typeface.
+  try {
+    const response = await fetch(interFontUrl);
+    const blob = await response.blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+    return `@font-face { font-family: "Inter Variable"; font-style: normal; font-weight: 100 900; src: url("${dataUrl}") format("woff2-variations"); }`;
+  } catch {
+    return "";
+  }
+}
+
 async function buildWebExportDocument(title) {
+  const interFontFace = await inlineInterFontFace();
   const html = `<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title || "Cours de guitare")}</title>
-<style>${NOTATION_FONT_FACES}${styleCssText}</style>
+<meta name="theme-color" content="#0b012e">
+<style>${NOTATION_FONT_FACES}${styleCssText}${interFontFace}</style>
 </head>
-<body style="background:#eef1f5; margin:0; padding:1.5rem 0.75rem;">
+<body style="background:#0b012e; margin:0; padding:1.5rem 0.75rem;">
 <article class="course-page web-mode" style="margin:0 auto;">${preview.innerHTML}</article>
 </body>
 </html>
