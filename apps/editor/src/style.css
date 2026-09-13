@@ -148,6 +148,14 @@ button:focus-visible,
   font-size: 0.75rem;
   letter-spacing: 0;
 }
+.topbar .brand-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.topbar .brand-link:hover {
+  color: #fff;
+}
 .actions {
   display: flex;
   align-items: center;

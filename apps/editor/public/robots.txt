@@ -1,0 +1,4 @@
+# Guitar Markdown Studio — https://gms.exostic.com/
+# Syntax reference for AI agents and LLM tools: https://gms.exostic.com/llms.txt
+User-agent: *
+Allow: /

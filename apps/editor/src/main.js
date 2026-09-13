@@ -60,7 +60,7 @@ app.innerHTML = `
   <header class="topbar">
     <div class="brand">
       <img class="brand-mark" src="${brandMarkUrl}" alt="" width="34" height="34" />
-      <div><h1>Guitar Markdown Studio</h1><p>Markdown → AST → SVG VexFlow / SVGuitar</p></div>
+      <div><h1>Guitar Markdown Studio</h1><p>Markdown → AST → SVG VexFlow / SVGuitar · <a class="brand-link" href="llms.txt" target="_blank" rel="noopener" title="Référence de la syntaxe, lisible par les agents IA">Doc / agents IA</a></p></div>
     </div>
     <div class="actions">
       <span id="status">Prêt</span>
@@ -954,6 +954,17 @@ function fromBase64(doc) {
   return new TextDecoder().decode(bytes);
 }
 
+// ?b64= carries the document as plain base64 (standard or URL-safe alphabet,
+// padding optional). It exists so that tools without lz-string — AI agents in
+// particular, see public/llms.txt — can build an opening link unambiguously.
+function fromPlainBase64(doc) {
+  const normalized = doc.replace(/-/g, "+").replace(/_/g, "/").replace(/\s/g, "");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 async function copyToClipboard(text) {
   if (navigator.clipboard?.writeText) {
     try {
@@ -1217,6 +1228,7 @@ function normalizeSrcUrl(url) {
 async function loadFromQueryParams() {
   const params = new URLSearchParams(window.location.search);
   const doc = params.get("doc");
+  const b64 = params.get("b64");
   const src = params.get("src");
   const requestedMode = VIEW_MODE_PARAM[params.get("mode")] ?? "web";
   viewOnly = params.get("view") === "only";
@@ -1229,6 +1241,13 @@ async function loadFromQueryParams() {
     } catch (error) {
       status.textContent = "Erreur de chargement";
       console.error("Impossible de décoder le document :", error);
+    }
+  } else if (b64) {
+    try {
+      editor.value = fromPlainBase64(b64);
+    } catch (error) {
+      status.textContent = "Erreur de chargement";
+      console.error("Impossible de décoder le document base64 :", error);
     }
   } else if (src) {
     try {

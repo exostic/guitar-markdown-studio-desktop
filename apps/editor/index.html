@@ -6,9 +6,22 @@
   <meta name="theme-color" content="#0b012e" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <title>Guitar Markdown Studio</title>
+  <meta name="description" content="Éditeur de cours de guitare en Markdown : tablatures, diagrammes d'accords, gammes, grilles, paroles, théorie et lecture audio. Documentation de la syntaxe pour les agents IA : /llms.txt" />
+  <link rel="alternate" type="text/plain" href="llms.txt" title="Syntax reference for AI agents (llms.txt)" />
+  <style>
+    /* Reference for AI agents, inlined from public/llms.txt at build time.
+       Hidden via a class (not the hidden attribute) so text extractors keep it. */
+    .agent-reference { display: none; }
+  </style>
 </head>
 <body>
   <div id="app"></div>
+  <noscript>
+    <p>Guitar Markdown Studio est un éditeur de cours de guitare en Markdown et nécessite JavaScript.</p>
+    <p>The syntax reference (for humans and AI agents) is available at <a href="llms.txt">/llms.txt</a>.
+    Open a lesson with <code>?src=&lt;url of a .md file&gt;</code> or <code>?b64=&lt;base64 markdown&gt;</code>.</p>
+  </noscript>
+  <!-- agent-reference -->
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

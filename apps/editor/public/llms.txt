@@ -1,0 +1,349 @@
+# Guitar Markdown Studio (gms.exostic.com)
+
+> Guitar Markdown Studio renders guitar lessons written in Markdown: tablatures, chord diagrams,
+> fretboard scale diagrams, chord grids, lyrics with chords, strumming patterns, key charts,
+> circle of fifths, tuner, and audio playback. The Markdown text is the only source of truth.
+> This file is written for AI agents: read it, then write a complete `.md` lesson and hand the
+> user a link that opens it in the editor.
+
+The site at https://gms.exostic.com/ is a JavaScript application (two panes: Markdown on the
+left, rendered lesson on the right, plus Web / Book / Poster view modes and print to PDF).
+Fetching the HTML page tells you nothing about the syntax; everything you need is in this file.
+
+## How to deliver a lesson to a user
+
+Write the whole lesson as one Markdown document, then give the user ONE of these links:
+
+1. `https://gms.exostic.com/?src=<URL of the .md file>` — the editor downloads the file.
+   The URL must serve plain text with CORS allowed: a raw GitHub file
+   (`https://raw.githubusercontent.com/...`), a GitHub Gist raw URL, or any public static host.
+   A `https://github.com/<owner>/<repo>/blob/...` URL is accepted and converted automatically.
+   Best option when you can create a file somewhere public: short link, editable later.
+2. `https://gms.exostic.com/?b64=<base64 of the UTF-8 Markdown>` — no hosting needed.
+   Standard or URL-safe base64 both work. Percent-encode `+`, `/` and `=` if you use standard
+   base64 (or use URL-safe base64: `-` and `_`, padding optional). Links get long
+   (roughly 1.4 × the document size) but work for lessons of a few kilobytes.
+3. `https://gms.exostic.com/?doc=<lz-string compressToEncodedURIComponent(markdown)>` —
+   what the app's own "Partager" button produces; shortest link, needs the `lz-string` library.
+
+Optional extra parameters, combinable with any of the above:
+
+- `mode=web` (default, interactive, audio playback), `mode=book` (A4 pages), `mode=poster`
+  (landscape, fit to page).
+- `view=only` hides the Markdown editor and shows the rendered lesson only.
+- `edit=hide` hides the "edit" button in view-only mode; `print=hide` hides the print buttons.
+
+Example: `https://gms.exostic.com/?src=https://raw.githubusercontent.com/me/lessons/main/am-pentatonic.md&mode=web&view=only`
+
+If you cannot produce a link, give the user the full Markdown in a code block and tell them to
+paste it into the left pane at https://gms.exostic.com/ (or save it as `.md` and use "Ouvrir").
+
+## Document structure
+
+A lesson = optional YAML front matter + standard Markdown (headings, paragraphs, lists, bold,
+blockquotes, links, images) + fenced code blocks with special languages listed below.
+Anything that is not a special block is ordinary Markdown. The UI language is French but the
+lesson content can be in any language.
+
+### Front matter
+
+```markdown
+---
+title: Amazing Grace
+artist: Traditional
+difficulty: Beginner
+tempo: 70 BPM
+time: 3/4
+capo: 0
+tuning: Standard
+key: G
+transpose: 0
+sounding: false
+logo: https://example.com/logo.png
+logo-position: left
+qr: false
+---
+```
+
+- `title`, `artist`, `difficulty`, `tempo`, `time`, `capo`, `tuning` are shown as badges under
+  the title. Only `title` is really needed; add the others when relevant.
+- `tempo`: `<number> BPM`. Drives audio playback (quarter notes) and the click-to-start metronome.
+- `time`: time signature, e.g. `4/4`, `3/4`, `6/8`.
+- `key`: song key (`G`, `Em`, `F# minor`, `Bb major`, French names like `Sol majeur` also work).
+  Used to spell transposed chord names correctly (flats vs sharps).
+- `transpose`: `+2`, `-3`… shifts every chord NAME in `chords`, `grid`, `song` blocks and tab
+  annotations. Scale diagrams, key charts and the circle of fifths are never rewritten.
+- `capo` + `sounding: true`: shows the sounding chord in parentheses, e.g. `Am (Cm)` with capo 3.
+- `tuning`: `Standard`, `Drop D`, `DADGAD`, `Open G`, `Open D`, `Eb standard`, or an explicit
+  low-to-high list `D A D G B e`. Used by scale diagrams, the tuner and audio playback.
+- `logo`: URL of an image shown in the header (none by default). `logo-position: left` or centred.
+- `qr: false` hides the header QR code (shown by default in Book/Poster modes).
+
+### Tablature — ```tab
+
+````markdown
+```tab
+    Em              C
+e|------0-------|------0-------|
+B|----0---0-----|----1---1-----|
+G|--0-------0---|--0-------0---|
+D|--------------|2-------------|
+A|2-------------|3-------------|
+E|0-------------|--------------|
+```
+````
+
+- Six lines, high e to low E, each starting with the string name and `|`. Keep all six lines the
+  same length and the bar lines `|` in the same columns.
+- Notes in the same column on different strings are played together (chords).
+  Each `|`-separated section is one bar.
+- An optional line ABOVE the six strings holds chord names / annotations aligned to the column
+  where they apply (like `Em` and `C` above).
+- Techniques: `5h7` hammer-on, `7p5` pull-off, `5/7` slide up, `7\5` slide down, `8b10` bend,
+  `7~` vibrato, `x` muted note.
+- Rhythm is not quantised: note duration is inferred from the number of events in the bar.
+  Space notes evenly and keep the same number of events per bar when possible.
+
+### Standard notation — ```partition
+
+Same ASCII syntax as `tab`, rendered as a music staff (VexFlow) instead of a tablature.
+Always assumes standard tuning.
+
+### Chord diagrams — ```chords
+
+````markdown
+```chords
+Em 022000
+C  x32010
+G  320003
+D  xx0232
+F  133211
+```
+````
+
+One chord per line: name, spaces, then six characters from low E to high e.
+`x` = muted string, `0` = open string, a digit = fret. Frets 10 and above are not supported as
+single characters, so keep chord shapes below the 10th fret or describe them in a `tab` block.
+
+### Fretboard scale diagram — ```scale
+
+Named scale (notes are computed, root highlighted, legend added):
+
+````markdown
+```scale
+scale: A minor pentatonic
+position: 1
+labels: notes
+```
+````
+
+Arpeggio (chord tones coloured by degree: root, 3rd, 5th, 7th):
+
+````markdown
+```scale
+arpeggio: Am7
+frets: 3-8
+```
+````
+
+Manual diagram (one line per string, frets separated by `|`):
+
+````markdown
+```scale
+frets: 0-12
+e: 0|3|[5,A]|8|10|12
+B: 1|3|[5]|8|10
+G: 0|2|[5]|7|9|12
+```
+````
+
+- `scale: <root> <name>`. Names (English or French): `major`, `minor`, `minor pentatonic`,
+  `major pentatonic`, `blues`, `major blues`, `harmonic minor`, `melodic minor`, `dorian`,
+  `phrygian`, `lydian`, `mixolydian`, `locrian`, `chromatic`, `whole tone`.
+- `arpeggio: <chord>` (e.g. `Am7`, `G`, `Cmaj7`, `E7`). Exclusive with `scale:`.
+- `position: N`: 5-fret window starting on the N-th scale note found on the low string
+  (position 1 starts on the lowest root). `frets: min-max` takes priority when both are present.
+- `labels: notes | degrees | none` (default `notes` for a scale, `degrees` for an arpeggio).
+- `tuning:` inside the block overrides the front matter tuning.
+- Manual string lines: `5` plain dot, `5,A` dot with label, `[5]` or `[5,A]` highlighted dot.
+  They can be mixed with `scale:` to override generated dots.
+
+### Key chart — ```key
+
+````markdown
+```key G
+```
+````
+
+````markdown
+```key
+key: F# minor
+sevenths: true
+```
+````
+
+Table of diatonic chords (degree, roman numeral, chord, notes, function), relative key,
+key signature, and for minor keys the harmonic-minor dominant. `sevenths: true` adds 7th chords.
+
+### Chord grid — ```grid
+
+````markdown
+```grid
+key: G
+||: I | V | vi | IV :|| x2
+| ii7 | V7 | I | I |
+```
+````
+
+- One bar per `|` cell. `||:` … `:||` are repeat signs, `xN` after the closing repeat = play N times.
+- With a `key:` line, roman numerals (`I ii iii IV V vi vii°`, `bVII`, `V7`, `IVmaj7`…) are
+  resolved to chord names, with the numeral shown small underneath. Plain chord names and
+  numerals can be mixed. In a minor key the numerals refer to the natural minor scale
+  (so in `Am`, `VII` is G and `VI` is F; `bVII` would give Gb). Lowercase = minor chord,
+  `°`/`dim`, `ø`, `+`/`aug` set the quality, suffixes like `7`, `maj7`, `sus4` are kept.
+- `G/B` = slash chord (bass note), shown split diagonally. Without a `key:` line, `/` keeps
+  that meaning and cells are plain chord names: `| Em | C | G/B | D |`.
+
+### Lyrics with chords — ```song
+
+Inline chords right before the syllable:
+
+````markdown
+```song
+[Em]Amazing [C]grace, how [G]sweet the [D]sound
+That [Em]saved a [C]wretch like [G]me
+```
+````
+
+Or chords on their own line, aligned in columns above the lyrics (both syntaxes can be mixed):
+
+````markdown
+```song
+Bm                         F#7
+On a dark desert highway   Cool wind in my hair
+```
+````
+
+An empty line separates verses. A line containing only `---` starts a new column.
+
+### Strumming pattern — ```rhythm
+
+````markdown
+```rhythm
+B H | B h | H B | h B
+```
+````
+
+Each `|`-separated group is one beat. `B` = down stroke, `H` = up stroke, lowercase = ghost
+(muted) stroke, `-` = rest. Playable in a loop with the metronome in Web mode.
+
+### Circle of fifths — ```circle
+
+````markdown
+```circle D
+```
+````
+
+Major keys outside, relative minors inside. The given key and its neighbours are highlighted.
+Without an argument the circle is neutral.
+
+### Tuner — ```tuner
+
+````markdown
+```tuner
+tuning: DADGAD
+```
+````
+
+Web mode: six buttons that play each open string. Print modes: a string / note / frequency table.
+Without `tuning:` the front matter tuning is used.
+
+### Layout blocks (empty blocks, each alone on its line)
+
+- ```` ```pagebreak ``` ```` page break.
+- ```` ```columnbreak ``` ```` column break inside a columns section.
+- ```` ```landscapebreak ``` ```` page break switching to landscape.
+- ```` ```columns ``` ```` … ```` ```column ``` ```` … ```` ```endcolumns ``` ```` multi-column
+  section; `column` separates columns, `endcolumns` closes the section.
+- ```` ```zoom 0.8 ``` ```` … ```` ```endzoom ``` ```` scales the content in between
+  (factor 0.1 to 3, default 0.8). Handy to fit several chord diagrams on one row.
+
+### Media
+
+Standard Markdown images and links work. In Web mode a YouTube link or a link to an audio
+file (`.mp3`, `.wav`, `.ogg`…) becomes an embedded player; in Book/Poster modes every link is
+printed as a QR code.
+
+### Audio playback (Web mode)
+
+A "▶ Écouter" button appears above `tab`, `partition`, `chords`, `grid` and `rhythm` blocks.
+Tempo comes from `tempo`, meter from `time`, pitch from `tuning` and `capo`. Nothing is needed
+in the Markdown to enable it.
+
+## Writing good lessons
+
+- Start with front matter (`title` at least, `tempo`, `time`, `key`, `tuning` when known).
+- Use `##` headings to structure: goal, chords, technique, main riff / verse, exercises, tips.
+- Put chord shapes in a `chords` block once, then use `grid` and `song` blocks for the form.
+- For a song: `chords` → `rhythm` → `grid` (structure with repeats) → `song` (lyrics) →
+  `tab` for the riff/intro/solo. Keep tab bars consistent and small (2 to 4 bars per block).
+- For theory: `key` chart + `grid` with roman numerals + `scale` (named scale, several
+  `position:` values) + `circle`. Explain in prose between the blocks.
+- Do not put chord names inside `chords` diagrams above the 9th fret, do not mix `scale:` and
+  `arpeggio:` in one block, do not forget `key:` when a grid uses roman numerals.
+- Check every `tab` block has exactly six string lines with aligned `|` characters.
+
+## Minimal complete example
+
+````markdown
+---
+title: A minor pentatonic, position 1
+difficulty: Beginner
+tempo: 80 BPM
+time: 4/4
+key: Am
+tuning: Standard
+---
+
+> **Goal:** learn the first box of the minor pentatonic scale and use it over a simple progression.
+
+## The scale
+
+```scale
+scale: A minor pentatonic
+position: 1
+labels: degrees
+```
+
+## Backing progression
+
+```grid
+key: Am
+||: i | VII | VI | V7 :|| x4
+```
+
+## Lick
+
+```tab
+e|--------------5--8--|--5-----------------|
+B|--------5--8--------|-----8--5-----------|
+G|--5--7--------------|-----------7--5-----|
+D|--------------------|---------------7~---|
+A|--------------------|--------------------|
+E|--------------------|--------------------|
+```
+
+## Chords used
+
+```chords
+Am x02210
+G  320003
+F  133211
+E7 020100
+```
+````
+
+## Links
+
+- Editor: https://gms.exostic.com/
+- Source and full French documentation: https://github.com/exostic/guitar-markdown-studio-desktop

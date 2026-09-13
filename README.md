@@ -267,6 +267,19 @@ Les images et liens Markdown standards fonctionnent tels quels :
 - En mode Web, un lien YouTube ou vers un fichier audio (`.mp3`, `.wav`, `.ogg`, …) s'affiche automatiquement avec un lecteur intégré au lieu d'un simple lien.
 - En mode Livre/Poster (impression), chaque lien s'affiche à la place sous forme de QR code (utile pour scanner un lien depuis une page imprimée).
 
+## Ouvrir un cours depuis un lien
+
+L'éditeur web (https://gms.exostic.com/) accepte des paramètres d'URL :
+
+- `?src=<url>` : charge un fichier `.md` distant (raw GitHub, Gist, tout hébergement statique public ; une URL `github.com/.../blob/...` est convertie automatiquement).
+- `?b64=<base64>` : le document encodé en base64 (alphabet standard ou URL-safe), sans hébergement.
+- `?doc=<lz-string>` : le format produit par le bouton **Partager** (`compressToEncodedURIComponent`).
+- `mode=web|book|poster`, `view=only`, `edit=hide`, `print=hide` : mode d'affichage et boutons masqués.
+
+## Agents IA
+
+La référence complète de la syntaxe, rédigée pour être lue par un agent IA (ChatGPT, Claude, etc.), est servie sur https://gms.exostic.com/llms.txt (source : `apps/editor/public/llms.txt`). Ce fichier est aussi injecté dans `index.html` à la construction (plugin dans `apps/editor/vite.config.js`, section masquée par CSS) : un agent qui lit simplement https://gms.exostic.com/ sans exécuter JavaScript reçoit donc la référence complète dès la première requête. Il suffit de donner l'adresse du site à l'agent pour qu'il puisse écrire un cours (théorie ou apprentissage d'un morceau) et renvoyer un lien `?src=` ou `?b64=` qui l'ouvre directement dans l'éditeur. Pensez à mettre ce fichier à jour quand la syntaxe évolue.
+
 ## Construire et exporter un PDF
 
 ```bash
