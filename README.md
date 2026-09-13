@@ -89,6 +89,8 @@ B|--------------8b10r8----8b---8br--------|
 
 La lecture audio suit ces techniques : les slides, bends et releases glissent la hauteur de la note sans la repincer, les hammer-on, pull-off et tapping jouent l'arrivée en legato, le vibrato fait onduler la note, les harmoniques sonnent comme une cloche.
 
+Une ligne `sound: clean` (ou `acoustic`, `distortion`) dans un bloc `tab` ou `partition` remplace le `sound` du front matter pour ce bloc seulement, par exemple une intro claire dans un morceau saturé.
+
 Le bloc `partition` accepte exactement la même syntaxe ASCII que `tab`, mais affiche une portée de notation musicale (VexFlow) au lieu d'une tablature.
 
 ## Diagrammes d'accords

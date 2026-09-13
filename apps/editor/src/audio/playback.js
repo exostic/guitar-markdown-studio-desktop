@@ -77,7 +77,7 @@ async function startBlock(button, entry, settings) {
   const built = buildEvents(entry, settings);
   if (!built) return;
   await ensureRunning();
-  setSound(settings.sound);
+  setSound(entry.sound ?? settings.sound);
   stopAll();
   const started = transport.play({
     events: built.events,

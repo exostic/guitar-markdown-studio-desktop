@@ -107,6 +107,8 @@ E|0-------------|--------------|
   `8b10` bend to a written note, `8b` full bend, `8br` bend and release, `10r8` release onto the
   next note, `7~` vibrato, `x` muted note, `(5)` ghost note, `<12>` natural harmonic.
   Playback renders them (pitch glides, legato attacks, vibrato, bell-like harmonics).
+- `sound: clean` (or `acoustic`, `distortion`) on its own line inside the block overrides the
+  front matter `sound` for this block only — e.g. a clean intro in a distorted song.
 - Rhythm is not quantised: note duration is inferred from the number of events in the bar.
   Space notes evenly and keep the same number of events per bar when possible.
 

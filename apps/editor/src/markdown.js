@@ -1,6 +1,7 @@
 import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
 import qrcode from "qrcode-generator";
+import { extractSoundLine } from "./audio/sound.js";
 import {
   diatonicChords,
   isRomanNumeral,
@@ -206,12 +207,15 @@ md.renderer.rules.fence = (tokens, index, options, env, self) => {
 
   if (language === "tab" || language === "partition") {
     const id = `gms-${language}-${blockCounter++}`;
+    // A `sound:` line inside the block picks the instrument for this block
+    // only (e.g. a clean intro in a distorted song).
+    const { body, sound } = extractSoundLine(token.content);
     try {
-      const ast = parseAsciiTab(token.content, { timeSignature: currentTimeSignature, tuning: currentTuning.notes });
+      const ast = parseAsciiTab(body, { timeSignature: currentTimeSignature, tuning: currentTuning.notes });
       for (const measure of ast.measures) measure.chord = displayChord(measure.chord);
-      pendingRenders.push({ type: language, id, ast });
+      pendingRenders.push({ type: language, id, ast, sound });
       const hostClass = language === "tab" ? "vex-tab-host" : "vex-score-host";
-      return `<figure class="guitar-block ${language}-block">${playButtonHtml(language, id)}<div id="${id}" class="${hostClass}"></div><details><summary>Source ASCII</summary><pre><code>${escapeHtml(token.content)}</code></pre></details></figure>`;
+      return `<figure class="guitar-block ${language}-block">${playButtonHtml(language, id)}<div id="${id}" class="${hostClass}"></div><details><summary>Source ASCII</summary><pre><code>${escapeHtml(body)}</code></pre></details></figure>`;
     } catch (error) {
       return blockError(language === "tab" ? "Tablature invalide" : "Partition invalide", error.message, token.content);
     }

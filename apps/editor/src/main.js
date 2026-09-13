@@ -10,6 +10,7 @@ import { renderChordDiagrams } from "@gms/renderer-svguitar";
 import { renderFretboardScale } from "@gms/renderer-fretboard";
 import { parseTuning } from "@gms/guitar-markdown";
 import { bindPlayback, clearRegistry, registerBlock, stopAll } from "./audio/playback.js";
+import { parseSound } from "./audio/sound.js";
 import LZString from "lz-string";
 import { Bravura } from "../../../node_modules/vexflow/build/esm/src/fonts/bravura.js";
 import { Academico } from "../../../node_modules/vexflow/build/esm/src/fonts/academico.js";
@@ -687,15 +688,6 @@ function applyEditorWidth() {
 // lazily by the click handler.
 let docSettings = { bpm: 80, timeSignature: "4/4", tuning: parseTuning(""), capo: 0, semitones: 0, sound: "acoustic" };
 
-// `sound:` accepts English or French words: acoustic (default), electric /
-// clean, distortion / overdrive / saturé.
-export function parseSound(text) {
-  const value = (text ?? "").toString().trim().toLowerCase();
-  if (/dist|disto|overdrive|drive|satur|crunch|fuzz/.test(value)) return "distortion";
-  if (/elec|élec|clean|clair/.test(value)) return "electric";
-  return "acoustic";
-}
-
 function refreshDocSettings(data) {
   const transposeMatch = /^([+-]?\d+)$/.exec((data.transpose ?? "").trim());
   docSettings = {
@@ -704,7 +696,7 @@ function refreshDocSettings(data) {
     tuning: parseTuning(data.tuning ?? "") ?? parseTuning(""),
     capo: Number(/(\d+)/.exec(data.capo ?? "")?.[1] ?? 0),
     semitones: transposeMatch ? Number(transposeMatch[1]) : 0,
-    sound: parseSound(data.sound ?? data.guitar ?? data.son),
+    sound: parseSound(data.sound ?? data.guitar ?? data.son) ?? "acoustic",
   };
 }
 
