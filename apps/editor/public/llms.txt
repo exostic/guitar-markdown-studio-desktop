@@ -286,7 +286,8 @@ printed as a QR code.
 
 A "▶ Écouter" button appears above `tab`, `partition`, `chords`, `grid` and `rhythm` blocks.
 Tempo comes from `tempo`, meter from `time`, pitch from `tuning` and `capo`. Nothing is needed
-in the Markdown to enable it.
+in the Markdown to enable it. A speed selector next to each button (25/50/65/80/100 %) slows
+that block down for practice; it is a reader-side setting, not something to write in the file.
 
 ## Writing good lessons
 

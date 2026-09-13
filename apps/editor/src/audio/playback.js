@@ -13,6 +13,26 @@ const transport = createTransport();
 let previewEl = null;
 let activeButton = null;
 let highlighted = null;
+// Practice speed per block (1 = the front matter tempo), keyed by block id
+// so it survives the re-render that follows every keystroke. The metronome
+// pill keeps the written tempo.
+const speeds = new Map();
+
+function speedControlId(select) {
+  return select.closest(".block-toolbar")?.querySelector(".play-button")?.dataset.target ?? null;
+}
+
+export function getSpeed(id) {
+  return speeds.get(id) ?? 1;
+}
+
+// Each `.play-speed` select shows its own block's value; called after each
+// render, since the selects are rebuilt with the page.
+export function syncSpeedControls(root = previewEl) {
+  root?.querySelectorAll(".play-speed").forEach(select => {
+    select.value = String(getSpeed(speedControlId(select)));
+  });
+}
 
 export function registerBlock(id, entry) {
   registry.set(id, entry);
@@ -81,7 +101,7 @@ async function startBlock(button, entry, settings) {
   stopAll();
   const started = transport.play({
     events: built.events,
-    bpm: settings.bpm,
+    bpm: settings.bpm * getSpeed(entry.id),
     totalBeats: built.totalBeats,
     loop: built.loop,
     id: entry.id,
@@ -121,6 +141,18 @@ async function strumDiagram(item, settings) {
 
 export function bindPlayback({ preview, getSettings }) {
   previewEl = preview;
+  preview.addEventListener("change", async event => {
+    const select = event.target.closest(".play-speed");
+    if (!select) return;
+    const value = Number(select.value);
+    const id = speedControlId(select);
+    if (!(value > 0) || !id) return;
+    speeds.set(id, value);
+    // If that block is playing, it picks the new speed up from the top.
+    if (activeButton?.dataset.target !== id) return;
+    const entry = registry.get(id);
+    if (entry) await startBlock(activeButton, entry, getSettings());
+  });
   preview.addEventListener("click", async event => {
     const tunerString = event.target.closest(".tuner-string");
     if (tunerString) {

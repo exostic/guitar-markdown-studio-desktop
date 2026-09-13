@@ -205,7 +205,7 @@ En mode Web, un bouton **▶ Écouter** apparaît au-dessus des blocs `tab`, `pa
 - grille : un accord par mesure (reprises et `xN` respectés, chiffres romains résolus dans la tonalité) ;
 - rythmique : la frappe en boucle avec le métronome, la frappe en cours est surlignée.
 
-Le tempo vient de `tempo` (BPM = noires, 80 par défaut), la mesure de `time` (une mesure à 6/8 compte 3 noires), l'accordage de `tuning`, et `capo` décale la hauteur. Rien de tout cela n'apparaît à l'impression ni dans l'export HTML, qui ne contient pas de JavaScript.
+Le tempo vient de `tempo` (BPM = noires, 80 par défaut), la mesure de `time` (une mesure à 6/8 compte 3 noires), l'accordage de `tuning`, et `capo` décale la hauteur. Le sélecteur de vitesse à côté de chaque bouton (25 %, 50 %, 65 %, 80 %, 100 %) ralentit la lecture de ce bloc pour travailler un passage ; chaque bloc a sa propre vitesse, et un bloc en cours de lecture repart à la nouvelle vitesse. Le métronome de la pastille `tempo` garde le tempo écrit. Rien de tout cela n'apparaît à l'impression ni dans l'export HTML, qui ne contient pas de JavaScript.
 
 ## Autres blocs
 

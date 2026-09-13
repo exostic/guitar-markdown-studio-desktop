@@ -9,7 +9,7 @@ import { renderTablatureSvg, renderScoreSvg } from "@gms/renderer-vexflow";
 import { renderChordDiagrams } from "@gms/renderer-svguitar";
 import { renderFretboardScale } from "@gms/renderer-fretboard";
 import { parseTuning } from "@gms/guitar-markdown";
-import { bindPlayback, clearRegistry, registerBlock, stopAll } from "./audio/playback.js";
+import { bindPlayback, clearRegistry, registerBlock, stopAll, syncSpeedControls } from "./audio/playback.js";
 import { parseSound } from "./audio/sound.js";
 import LZString from "lz-string";
 import { Bravura } from "../../../node_modules/vexflow/build/esm/src/fonts/bravura.js";
@@ -217,6 +217,7 @@ function drawPending(renders) {
   // instead of the dynamic width measurement.
   const measuresPerRow = webMode ? computeMeasuresPerRow() : PRINT_MODE_MEASURES_PER_ROW;
   clearRegistry();
+  syncSpeedControls(preview);
   for (const render of renders) {
     registerBlock(render.id, render);
     const target = document.getElementById(render.id);

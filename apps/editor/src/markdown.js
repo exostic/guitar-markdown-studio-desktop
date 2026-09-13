@@ -126,8 +126,13 @@ function blockError(title, message, source) {
   return `<div class="block-error"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(message)}</p>${source ? `<pre>${escapeHtml(source)}</pre>` : ""}</div>`;
 }
 
+// Practice speeds, one selector per block next to its play button so it is
+// where the reader looks when slowing a passage down.
+export const PLAY_SPEEDS = [0.25, 0.5, 0.65, 0.8, 1];
+
 function playButtonHtml(type, id) {
-  return `<div class="block-toolbar block-web"><button type="button" class="play-button" data-play="${type}" data-target="${id}" title="Écouter (mode Web)">▶ Écouter</button></div>`;
+  const options = PLAY_SPEEDS.map(speed => `<option value="${speed}"${speed === 1 ? " selected" : ""}>${Math.round(speed * 100)} %</option>`).join("");
+  return `<div class="block-toolbar block-web"><select class="play-speed" title="Vitesse de lecture" aria-label="Vitesse de lecture">${options}</select><button type="button" class="play-button" data-play="${type}" data-target="${id}" title="Écouter (mode Web)">▶ Écouter</button></div>`;
 }
 
 function scaleCaptionHtml(meta) {

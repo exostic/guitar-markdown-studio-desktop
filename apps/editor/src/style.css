@@ -1210,7 +1210,24 @@ pre {
 .block-toolbar {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0 0 0.35rem;
+}
+.play-speed {
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.24rem 0.5rem;
+  border-radius: 999px;
+  background: var(--doc-tint);
+  color: var(--doc-accent);
+  border: 1px solid var(--doc-tint-border);
+  cursor: pointer;
+  line-height: 1.2;
+}
+.play-speed:hover {
+  border-color: var(--doc-accent);
 }
 .play-button,
 .tuner-string {
@@ -1460,7 +1477,8 @@ pre {
 @media print {
   .block-toolbar,
   .block-web,
-  .play-button {
+  .play-button,
+  .play-speed {
     display: none !important;
   }
   .block-print {
