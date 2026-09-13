@@ -35,6 +35,7 @@ tuning: Standard
 key: G
 transpose: 0
 sounding: false
+sound: acoustic
 logo: https://raw.githubusercontent.com/<user>/<repo>/main/assets/logo.png
 logo-position: left
 qr: false
@@ -49,6 +50,7 @@ qr: false
 - `transpose` : `+2`, `-3`… décale tous les **noms d'accords** des blocs `chords`, `grid`, `song` et les annotations des tablatures. Les diagrammes de gamme, tableaux de tonalité et cercle des quintes ne sont jamais réécrits.
 - `capo` + `sounding: true` : affiche entre parenthèses l'accord réellement entendu (« Am (Cm) » avec un capo en 3) sur les diagrammes d'accords et dans les grilles.
 - `tuning` : `Standard`, `Drop D`, `DADGAD`, `Open G`, `Open D`, `Eb standard` ou une liste `D A D G B e`. Utilisé par les diagrammes de gamme, l'accordeur et la lecture audio.
+- `sound` : instrument de la lecture audio — `acoustic` (défaut), `electric` (guitare électrique claire) ou `distortion` (électrique saturée). Les mots français fonctionnent aussi (`électrique`, `saturé`).
 - `tempo` : cliquer sur la pastille lance un métronome (mode Web).
 
 ## Tablatures
@@ -70,16 +72,22 @@ Le parser regroupe les notes placées à la même colonne en un seul événement
 Techniques reconnues dans l'AST et dans le rendu :
 
 ```text
-e|--5h7--7p5--5/7--7\5~--|
-B|--------------8b10------|
+e|--5h7--7p5--5/7--7\5~--5t12--(5)--<12>--|
+B|--------------8b10r8----8b---8br--------|
 ```
 
 - `h` : hammer-on
 - `p` : pull-off
+- `t` : tapping
 - `/` et `\` : slides
-- `b` : bend
+- `b` : bend — `8b10` monte jusqu'à la note écrite, `8b` seul monte d'un ton, `8br` monte puis redescend
+- `r` : release d'un bend vers la note qui suit (`10r8`, `8b---r8`)
 - `~` : vibrato
 - `x` : note étouffée
+- `(5)` : note fantôme (jouée doucement)
+- `<12>` : harmonique naturelle
+
+La lecture audio suit ces techniques : les slides, bends et releases glissent la hauteur de la note sans la repincer, les hammer-on, pull-off et tapping jouent l'arrivée en legato, le vibrato fait onduler la note, les harmoniques sonnent comme une cloche.
 
 Le bloc `partition` accepte exactement la même syntaxe ASCII que `tab`, mais affiche une portée de notation musicale (VexFlow) au lieu d'une tablature.
 

@@ -24,3 +24,34 @@ A|----------|
 E|----------|`);
   assert.deepEqual(ast.measures[0].techniques.map(t => t.type), ["hammer", "pull"]);
 });
+
+test("détecte tap, bends, releases, vibrato et notes spéciales", () => {
+  const ast = parseAsciiTab(`e|-5t7-8b10r8-8b---r8-8br--13b(hold)-8h10-7~~-(5)-<12>-|
+B|-------------------------------------------------------|
+G|-------------------------------------------------------|
+D|-------------------------------------------------------|
+A|-------------------------------------------------------|
+E|-------------------------------------------------------|`);
+  const measure = ast.measures[0];
+  assert.deepEqual(
+    measure.techniques.map(t => [t.type, t.fromEvent, t.toEvent]),
+    [["tap", 0, 1], ["bend", 2, 3], ["release", 3, 4], ["release", 5, 6], ["hammer", 9, 10]],
+  );
+  assert.deepEqual(
+    measure.ornaments.map(o => [o.type, o.event]),
+    [["bend", 5], ["bend-release", 7], ["bend", 8], ["vibrato", 11]],
+  );
+  const frets = measure.events.map(event => event.positions[0]);
+  assert.deepEqual(frets[12], { string: 1, fret: "5", ghost: true });
+  assert.deepEqual(frets[13], { string: 1, fret: "12", harmonic: true });
+});
+
+test("le vibrato en fin de mesure est conservé", () => {
+  const ast = parseAsciiTab(`e|--7~~~~|
+B|-------|
+G|-------|
+D|-------|
+A|-------|
+E|-------|`);
+  assert.deepEqual(ast.measures[0].ornaments, [{ type: "vibrato", string: 1, event: 0 }]);
+});

@@ -3,7 +3,7 @@
 // and single chord diagrams; cues from the scheduler drive `.playing`
 // highlights on measures, diagrams, grid cells and strokes.
 import { chordsBlockToEvents, gridToEvents, shapeToEvents } from "./chordEvents.js";
-import { ensureRunning, pluck } from "./engine.js";
+import { ensureRunning, pluck, setSound } from "./engine.js";
 import { rhythmToEvents } from "./rhythmEvents.js";
 import { createTransport } from "./scheduler.js";
 import { measureBeatsFor, parseTimeSignature, tabToEvents } from "./tabEvents.js";
@@ -77,6 +77,7 @@ async function startBlock(button, entry, settings) {
   const built = buildEvents(entry, settings);
   if (!built) return;
   await ensureRunning();
+  setSound(settings.sound);
   stopAll();
   const started = transport.play({
     events: built.events,
@@ -111,6 +112,7 @@ async function strumDiagram(item, settings) {
   const chord = entry.ast[index];
   if (!chord) return;
   await ensureRunning();
+  setSound(settings.sound);
   stopAll();
   const events = shapeToEvents(chord.frets, { tuning: settings.tuning, capo: settings.capo, duration: 2 });
   transport.play({ events, bpm: settings.bpm, totalBeats: 2, loop: false, id: `${host.id}:${index}`, onEnd: () => stopAll() });
@@ -123,6 +125,7 @@ export function bindPlayback({ preview, getSettings }) {
     const tunerString = event.target.closest(".tuner-string");
     if (tunerString) {
       const ctx = await ensureRunning();
+      setSound(getSettings().sound);
       pluck({ midi: Number(tunerString.dataset.midi), time: ctx.currentTime, duration: 2.2 });
       tunerString.classList.add("playing");
       setTimeout(() => tunerString.classList.remove("playing"), 700);

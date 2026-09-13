@@ -58,6 +58,7 @@ capo: 0
 tuning: Standard
 key: G
 transpose: 0
+sound: acoustic
 sounding: false
 logo: https://example.com/logo.png
 logo-position: left
@@ -76,6 +77,9 @@ qr: false
 - `capo` + `sounding: true`: shows the sounding chord in parentheses, e.g. `Am (Cm)` with capo 3.
 - `tuning`: `Standard`, `Drop D`, `DADGAD`, `Open G`, `Open D`, `Eb standard`, or an explicit
   low-to-high list `D A D G B e`. Used by scale diagrams, the tuner and audio playback.
+- `sound`: instrument used by audio playback — `acoustic` (default), `electric` (clean electric
+  guitar) or `distortion` (overdriven electric guitar). French words work too (`électrique`,
+  `saturé`). Only affects the sound, never the notation.
 - `logo`: URL of an image shown in the header (none by default). `logo-position: left` or centred.
 - `qr: false` hides the header QR code (shown by default in Book/Poster modes).
 
@@ -99,8 +103,10 @@ E|0-------------|--------------|
   Each `|`-separated section is one bar.
 - An optional line ABOVE the six strings holds chord names / annotations aligned to the column
   where they apply (like `Em` and `C` above).
-- Techniques: `5h7` hammer-on, `7p5` pull-off, `5/7` slide up, `7\5` slide down, `8b10` bend,
-  `7~` vibrato, `x` muted note.
+- Techniques: `5h7` hammer-on, `7p5` pull-off, `5t12` tap, `5/7` slide up, `7\5` slide down,
+  `8b10` bend to a written note, `8b` full bend, `8br` bend and release, `10r8` release onto the
+  next note, `7~` vibrato, `x` muted note, `(5)` ghost note, `<12>` natural harmonic.
+  Playback renders them (pitch glides, legato attacks, vibrato, bell-like harmonics).
 - Rhythm is not quantised: note duration is inferred from the number of events in the bar.
   Space notes evenly and keep the same number of events per bar when possible.
 

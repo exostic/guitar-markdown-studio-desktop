@@ -25,15 +25,84 @@ E|0---------|------|`);
   assert.equal(measureBeatsFor("6/8"), 3);
 });
 
-test("tabToEvents : hammer et bend adoucissent la note d'arrivée", () => {
-  const ast = parseAsciiTab(`e|--5h7--8b10--|
-B|-----------|
-G|-----------|
-D|-----------|
-A|-----------|
-E|-----------|`);
+test("tabToEvents : hammer, pull et tap jouent l'arrivée en legato", () => {
+  const ast = parseAsciiTab(`e|--5h7--8p7--5t12--|
+B|------------------|
+G|------------------|
+D|------------------|
+A|------------------|
+E|------------------|`);
   const plucks = tabToEvents(ast, { tuning }).events.filter(e => e.kind === "pluck");
-  assert.deepEqual(plucks.map(p => [p.midi, p.velocity]), [[69, 1], [71, 0.6], [72, 1], [74, 0.6]]);
+  assert.deepEqual(
+    plucks.map(p => [p.midi, p.velocity, Boolean(p.legato)]),
+    [[69, 1, false], [71, 0.6, true], [72, 1, false], [71, 0.6, true], [69, 1, false], [76, 0.6, true]],
+  );
+  assert.ok(plucks.every(p => !p.glides));
+});
+
+test("tabToEvents : slides et bends glissent la note de départ sans repincer", () => {
+  const ast = parseAsciiTab(`e|5/7/9---8b10----|
+B|----------------|
+G|----------------|
+D|----------------|
+A|----------------|
+E|----------------|`);
+  const plucks = tabToEvents(ast, { tuning }).events.filter(e => e.kind === "pluck");
+  assert.deepEqual(plucks.map(p => p.midi), [69, 72]);
+  const [slide, bend] = plucks;
+  assert.deepEqual(slide.glides.map(g => g.midi), [71, 73]);
+  assert.ok(slide.glides[0].beat > 0 && slide.glides[1].beat > slide.glides[0].beat);
+  assert.ok(slide.glides.every(g => g.span > 0 && g.span <= 0.2));
+  // The chain head rings until the last slide target would have ended.
+  assert.ok(slide.duration > slide.glides[1].beat);
+  assert.deepEqual(bend.glides.map(g => g.midi), [74]);
+  assert.ok(bend.glides[0].span > 0.2);
+  assert.ok(bend.duration > bend.glides[0].beat);
+});
+
+test("tabToEvents : bends sans cible, bend-release et release vers une note", () => {
+  const ast = parseAsciiTab(`e|8b----8br----8b10r8----8b---r8--|
+B|--------------------------------|
+G|--------------------------------|
+D|--------------------------------|
+A|--------------------------------|
+E|--------------------------------|`);
+  const plucks = tabToEvents(ast, { tuning }).events.filter(e => e.kind === "pluck");
+  assert.deepEqual(plucks.map(p => p.midi), [72, 72, 72, 72]);
+  const [full, bendRelease, written, implied] = plucks;
+  assert.deepEqual(full.glides.map(g => g.midi), [74]);
+  assert.deepEqual(bendRelease.glides.map(g => g.midi), [74, 72]);
+  assert.ok(bendRelease.glides[1].beat > bendRelease.glides[0].beat);
+  assert.deepEqual(written.glides.map(g => g.midi), [74, 72]);
+  // `8b---r8`: the release link absorbs the second 8; the bend itself has no
+  // written target so only the way back down is a glide.
+  assert.deepEqual(implied.glides.map(g => g.midi), [72]);
+});
+
+test("tabToEvents : vibrato, notes fantômes et harmoniques", () => {
+  const ast = parseAsciiTab(`e|--7~~~--5---(5)~~-<12>--<7>-|
+B|----------------------------|
+G|----------------------------|
+D|----------------------------|
+A|----------------------------|
+E|----------------------------|`);
+  const plucks = tabToEvents(ast, { tuning, capo: 2 }).events.filter(e => e.kind === "pluck");
+  assert.deepEqual(
+    plucks.map(p => [p.midi, p.velocity, p.vibratoAt ?? null, Boolean(p.harmonic)]),
+    [[73, 1, 0, false], [71, 1, null, false], [71, 0.45, 0, false], [76, 1, null, true], [83, 1, null, true]],
+  );
+});
+
+test("tabToEvents : le vibrato à l'arrivée d'un slide démarre au moment du glissé", () => {
+  const ast = parseAsciiTab(`e|5/7~~---|
+B|--------|
+G|--------|
+D|--------|
+A|--------|
+E|--------|`);
+  const [pluck] = tabToEvents(ast, { tuning }).events.filter(e => e.kind === "pluck");
+  assert.equal(pluck.vibratoAt, pluck.glides[0].beat);
+  assert.ok(pluck.vibratoAt > 0);
 });
 
 test("shapeToEvents ignore les cordes étouffées et étale le balayage", () => {

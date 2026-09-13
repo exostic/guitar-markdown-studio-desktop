@@ -31,22 +31,49 @@ function splitMeasures(body) {
   return cleaned.split("|");
 }
 
+// A note token is a fret number or `x` (muted), optionally wrapped: `(8)` is
+// a ghost/tied note played softly, `<12>` a natural harmonic.
 function readTokenAt(segment, index) {
   const rest = segment.slice(index);
-  const match = rest.match(/^(\d+|x)/i);
+  const match = rest.match(/^(?:\((\d+)\)|<(\d+)>|(\d+|x))/i);
   if (!match) return null;
-  return { value: match[1].toLowerCase(), length: match[1].length };
+  const token = { value: (match[1] ?? match[2] ?? match[3]).toLowerCase(), length: match[0].length };
+  if (match[1] !== undefined) token.ghost = true;
+  if (match[2] !== undefined) token.harmonic = true;
+  return token;
 }
 
-function techniqueBetween(segment, fromEnd, toStart) {
-  const text = segment.slice(fromEnd, toStart);
+// Parenthesised words such as `(hold)` are performance notes: drop them so
+// their letters are not mistaken for techniques.
+function cleanTechniqueText(text) {
+  return text.replace(/\([a-z]+\)/gi, "");
+}
+
+// Links join two notes on one string: the second note is reached without a
+// new pick (hammer, pull, tap), by sliding, by bending straight into it
+// (`8b10`) or by releasing a bend onto it (`10r8`, `8b---r8`).
+function linkBetween(segment, fromEnd, toStart) {
+  const text = cleanTechniqueText(segment.slice(fromEnd, toStart));
   if (/h/i.test(text)) return "hammer";
   if (/p/i.test(text)) return "pull";
+  if (/t/i.test(text)) return "tap";
   if (/\//.test(text)) return "slide-up";
   if (/\\/.test(text)) return "slide-down";
-  if (/b/i.test(text)) return "bend";
-  if (/~/.test(text)) return "vibrato";
+  if (/^b$/i.test(text)) return "bend";
+  if (/r$/i.test(text) && !/^br/i.test(text)) return "release";
   return null;
+}
+
+// Ornaments belong to one note and are read from the text that follows it,
+// up to the next note or the end of the bar: `8b---` a full bend with no
+// written target, `8br` a bend released on the same note, `7~~` vibrato.
+function ornamentsAfter(segment, fromEnd, toStart) {
+  const text = cleanTechniqueText(segment.slice(fromEnd, toStart));
+  const found = [];
+  if (/^br/i.test(text)) found.push("bend-release");
+  else if (/^b/i.test(text) && !/^b$/i.test(text)) found.push("bend");
+  if (/~/.test(text)) found.push("vibrato");
+  return found;
 }
 
 const DURATION_TABLE = [
@@ -104,8 +131,11 @@ function parseMeasure(segments, measureIndex, chord = "", timeSignature = "4/4")
         endColumn: column + token.length,
       };
       notes.push(note);
+      const position = { string: stringNumber, fret: token.value };
+      if (token.ghost) position.ghost = true;
+      if (token.harmonic) position.harmonic = true;
       if (!eventMap.has(column)) eventMap.set(column, []);
-      eventMap.get(column).push({ string: stringNumber, fret: token.value });
+      eventMap.get(column).push(position);
       column += token.length;
     }
     perStringNotes.push({ string: stringNumber, segment, notes });
@@ -125,21 +155,23 @@ function parseMeasure(segments, measureIndex, chord = "", timeSignature = "4/4")
   });
 
   const techniques = [];
+  const ornaments = [];
   for (const row of perStringNotes) {
-    for (let i = 0; i < row.notes.length - 1; i += 1) {
-      const current = row.notes[i];
+    row.notes.forEach((current, i) => {
       const next = row.notes[i + 1];
-      const type = techniqueBetween(row.segment, current.endColumn, next.column);
-      if (!type) continue;
-      const fromEvent = events.findIndex(event => event.column === current.column);
-      const toEvent = events.findIndex(event => event.column === next.column);
-      if (fromEvent >= 0 && toEvent >= 0) {
-        techniques.push({ type, string: row.string, fromEvent, toEvent });
+      const eventIndex = events.findIndex(event => event.column === current.column);
+      if (eventIndex < 0) return;
+      for (const type of ornamentsAfter(row.segment, current.endColumn, next?.column ?? row.segment.length)) {
+        ornaments.push({ type, string: row.string, event: eventIndex });
       }
-    }
+      if (!next) return;
+      const type = linkBetween(row.segment, current.endColumn, next.column);
+      const toEvent = events.findIndex(event => event.column === next.column);
+      if (type && toEvent >= 0) techniques.push({ type, string: row.string, fromEvent: eventIndex, toEvent });
+    });
   }
 
-  return { index: measureIndex, chord, width, events, techniques };
+  return { index: measureIndex, chord, width, events, techniques, ornaments };
 }
 
 export function parseAsciiTab(source, options = {}) {

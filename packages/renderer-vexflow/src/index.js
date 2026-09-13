@@ -1,3 +1,4 @@
+import { harmonicSemitones } from "@gms/guitar-markdown";
 import {
   Annotation,
   Beam,
@@ -72,12 +73,36 @@ function addChordAnnotation(note, chord) {
   );
 }
 
+function bendText(semitones) {
+  if (semitones <= 1) return "1/2";
+  if (semitones === 2) return "Full";
+  if (semitones === 3) return "1 1/2";
+  return `${semitones / 2}`;
+}
+
+// Bends are drawn as a phrase on the note that starts them: a written
+// target (`8b10`) gives the amount, `8b---` is a full bend, `8br` goes up and
+// back, and a release link (`10r8`) is the downward leg on its own note.
 function addSingleNoteModifiers(note, event, measure, eventIndex) {
   const outgoing = measure.techniques.filter(technique => technique.fromEvent === eventIndex);
-  if (outgoing.some(technique => technique.type === "bend")) {
-    note.addModifier(new Bend([{ type: Bend.UP, text: "Full" }]), 0);
+  const ornaments = measure.ornaments?.filter(ornament => ornament.event === eventIndex) ?? [];
+  const phrase = [];
+  const bendLink = outgoing.find(technique => technique.type === "bend");
+  if (bendLink) {
+    const from = event.positions.find(position => position.string === bendLink.string);
+    const to = measure.events[bendLink.toEvent]?.positions.find(position => position.string === bendLink.string);
+    const semitones = from && to && from.fret !== "x" && to.fret !== "x" ? Math.abs(Number(to.fret) - Number(from.fret)) : 2;
+    phrase.push({ type: Bend.UP, text: bendText(semitones) });
+  } else if (ornaments.some(ornament => ornament.type === "bend-release")) {
+    phrase.push({ type: Bend.UP, text: "Full" }, { type: Bend.DOWN, text: "" });
+  } else if (ornaments.some(ornament => ornament.type === "bend")) {
+    phrase.push({ type: Bend.UP, text: "Full" });
   }
-  if (outgoing.some(technique => technique.type === "vibrato")) {
+  if (outgoing.some(technique => technique.type === "release") && !phrase.some(step => step.type === Bend.DOWN)) {
+    phrase.push({ type: Bend.DOWN, text: "" });
+  }
+  if (phrase.length) note.addModifier(new Bend(phrase), 0);
+  if (ornaments.some(ornament => ornament.type === "vibrato")) {
     note.addModifier(new Vibrato(), 0);
   }
 }
@@ -99,6 +124,7 @@ function connectorForTechnique(technique, notes) {
 
   if (technique.type === "hammer") return new TabTie(tieOptions, "H");
   if (technique.type === "pull") return new TabTie(tieOptions, "P");
+  if (technique.type === "tap") return new TabTie(tieOptions, "T");
   if (technique.type === "slide-up") return TabSlide.createSlideUp(tieOptions);
   if (technique.type === "slide-down") return TabSlide.createSlideDown(tieOptions);
   return null;
@@ -109,7 +135,7 @@ function createMeasureNotes(measure, { annotateChord = true } = {}) {
     const note = new TabNote({
       positions: event.positions.map(position => ({
         str: position.string,
-        fret: position.fret,
+        fret: displayFret(position),
       })),
       duration: event.duration,
     });
@@ -119,8 +145,17 @@ function createMeasureNotes(measure, { annotateChord = true } = {}) {
   });
 }
 
+// Ghost notes keep their parentheses and harmonics their angle brackets in
+// the tab, as written in the source.
+function displayFret(position) {
+  if (position.ghost) return `(${position.fret})`;
+  if (position.harmonic) return `<${position.fret}>`;
+  return position.fret;
+}
+
 function pitchForPosition(position) {
-  return STANDARD_TUNING.getNoteForFret(position.fret, position.string);
+  const fret = position.harmonic ? harmonicSemitones(Number(position.fret)) : position.fret;
+  return STANDARD_TUNING.getNoteForFret(fret, position.string);
 }
 
 function createStandardNotes(measure) {

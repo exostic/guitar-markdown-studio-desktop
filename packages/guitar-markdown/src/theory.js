@@ -468,6 +468,14 @@ export function parseTuning(text) {
   return tuningFromNotes(null, label, notes);
 }
 
+// Natural harmonic nodes: the fret touched and the interval above the open
+// string that rings. Unknown positions fall back to the octave.
+const HARMONIC_INTERVALS = { 12: 12, 7: 19, 19: 19, 5: 24, 24: 24, 4: 28, 9: 28, 16: 28, 3: 31 };
+
+export function harmonicSemitones(fret) {
+  return HARMONIC_INTERVALS[Number(fret)] ?? 12;
+}
+
 export function stringMidi(tuningObject, stringNumber, fret, capo = 0) {
   return tuningObject.midi[6 - stringNumber] + Number(fret) + capo;
 }

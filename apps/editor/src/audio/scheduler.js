@@ -9,7 +9,16 @@ const START_DELAY = 0.08;
 
 function fire(event, time, secondsPerBeat) {
   if (event.kind === "pluck") {
-    pluck({ midi: event.midi, time, duration: (event.duration ?? 1) * secondsPerBeat, velocity: event.velocity ?? 1 });
+    pluck({
+      midi: event.midi,
+      time,
+      duration: (event.duration ?? 1) * secondsPerBeat,
+      velocity: event.velocity ?? 1,
+      legato: Boolean(event.legato),
+      harmonic: Boolean(event.harmonic),
+      vibratoAt: event.vibratoAt === undefined ? null : event.vibratoAt * secondsPerBeat,
+      glides: event.glides?.map(glide => ({ midi: glide.midi, at: glide.beat * secondsPerBeat, span: glide.span * secondsPerBeat })),
+    });
   } else if (event.kind === "click") {
     click({ time, accent: Boolean(event.accent) });
   } else if (event.kind === "strum") {

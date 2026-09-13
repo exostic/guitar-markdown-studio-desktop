@@ -682,9 +682,19 @@ function applyEditorWidth() {
 }
 
 // Playback settings derived from the front matter: tempo (BPM = quarter
-// notes), time signature (a 6/8 bar is 3 quarter-beats), tuning, capo and
-// transposition. Rebuilt on every render; read lazily by the click handler.
-let docSettings = { bpm: 80, timeSignature: "4/4", tuning: parseTuning(""), capo: 0, semitones: 0 };
+// notes), time signature (a 6/8 bar is 3 quarter-beats), tuning, capo,
+// transposition and the instrument sound. Rebuilt on every render; read
+// lazily by the click handler.
+let docSettings = { bpm: 80, timeSignature: "4/4", tuning: parseTuning(""), capo: 0, semitones: 0, sound: "acoustic" };
+
+// `sound:` accepts English or French words: acoustic (default), electric /
+// clean, distortion / overdrive / saturé.
+export function parseSound(text) {
+  const value = (text ?? "").toString().trim().toLowerCase();
+  if (/dist|disto|overdrive|drive|satur|crunch|fuzz/.test(value)) return "distortion";
+  if (/elec|élec|clean|clair/.test(value)) return "electric";
+  return "acoustic";
+}
 
 function refreshDocSettings(data) {
   const transposeMatch = /^([+-]?\d+)$/.exec((data.transpose ?? "").trim());
@@ -694,6 +704,7 @@ function refreshDocSettings(data) {
     tuning: parseTuning(data.tuning ?? "") ?? parseTuning(""),
     capo: Number(/(\d+)/.exec(data.capo ?? "")?.[1] ?? 0),
     semitones: transposeMatch ? Number(transposeMatch[1]) : 0,
+    sound: parseSound(data.sound ?? data.guitar ?? data.son),
   };
 }
 

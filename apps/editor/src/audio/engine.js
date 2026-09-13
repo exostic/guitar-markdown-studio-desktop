@@ -9,6 +9,15 @@ let master = null;
 const bufferCache = new Map();
 const activeVoices = new Set();
 
+// Instrument sound: the plucked string is the same, what changes is the
+// "amp" it goes through. `acoustic` is the bare string; `electric` rolls off
+// the top like a pickup into a clean amp; `distortion` drives every voice
+// through one shared waveshaper (chords intermodulate like on a real amp)
+// and a cabinet-style low-pass.
+export const SOUNDS = ["acoustic", "electric", "distortion"];
+let currentSound = "acoustic";
+const buses = new Map();
+
 const PLUCK_SECONDS = 3;
 
 export function getAudioContext() {
@@ -36,6 +45,74 @@ export async function ensureRunning() {
     }
   }
   return ctx;
+}
+
+export function setSound(name) {
+  currentSound = SOUNDS.includes(name) ? name : "acoustic";
+}
+
+export function getSound() {
+  return currentSound;
+}
+
+function distortionCurve(drive, samples = 4096) {
+  const curve = new Float32Array(samples);
+  const norm = Math.tanh(drive);
+  for (let i = 0; i < samples; i += 1) {
+    const x = (i * 2) / (samples - 1) - 1;
+    curve[i] = Math.tanh(drive * x) / norm;
+  }
+  return curve;
+}
+
+function biquad(ctx, type, frequency, q = 0.7) {
+  const filter = ctx.createBiquadFilter();
+  filter.type = type;
+  filter.frequency.value = frequency;
+  filter.Q.value = q;
+  return filter;
+}
+
+function chain(nodes) {
+  for (let i = 0; i < nodes.length - 1; i += 1) nodes[i].connect(nodes[i + 1]);
+  return nodes[0];
+}
+
+function buildBus(name) {
+  const ctx = getAudioContext();
+  const input = ctx.createGain();
+  if (name === "electric") {
+    const level = ctx.createGain();
+    level.gain.value = 1.1;
+    chain([input, biquad(ctx, "highpass", 70), biquad(ctx, "lowpass", 3800, 0.9), level, master]);
+  } else if (name === "distortion") {
+    const drive = ctx.createGain();
+    drive.gain.value = 14;
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = distortionCurve(6);
+    shaper.oversample = "4x";
+    const level = ctx.createGain();
+    level.gain.value = 0.28;
+    chain([
+      input,
+      biquad(ctx, "highpass", 90),
+      drive,
+      shaper,
+      // Cabinet: tame the fizz, add a little body around 500 Hz.
+      biquad(ctx, "peaking", 500, 1),
+      biquad(ctx, "lowpass", 3200, 0.8),
+      level,
+      master,
+    ]);
+  } else {
+    input.connect(master);
+  }
+  return input;
+}
+
+function instrumentBus() {
+  if (!buses.has(currentSound)) buses.set(currentSound, buildBus(currentSound));
+  return buses.get(currentSound);
 }
 
 function pluckBuffer(midi) {
@@ -77,20 +154,122 @@ function track(node) {
   return node;
 }
 
-export function pluck({ midi, time, duration = 2, velocity = 1 }) {
+// Pitch techniques ride on the voice: a faster playback rate is a higher
+// note, so slides, bends and releases are rate ramps (`glides`, seconds from
+// the onset); vibrato is an LFO on `detune` from `vibratoAt` seconds in; a
+// hammered/pulled/tapped note (`legato`) gets a duller, fade-in attack
+// instead of the pick transient; a natural harmonic is a sine chime.
+const VIBRATO_HZ = 5.5;
+const VIBRATO_CENTS = 25;
+const LEGATO_CUTOFF_HZ = 1800;
+const LEGATO_FADE_SECONDS = 0.015;
+const HARMONIC_SECONDS = 1.6;
+
+function rateForInterval(fromMidi, toMidi) {
+  return 2 ** ((toMidi - fromMidi) / 12);
+}
+
+// Schedules the pitch curve on an AudioParam whose rest value is `unit`
+// (playbackRate 1, or the oscillator's base frequency).
+function scheduleGlides(param, unit, baseMidi, glides, time, hold) {
+  let value = unit;
+  param.setValueAtTime(value, time);
+  for (const glide of glides) {
+    const arrive = time + Math.min(glide.at, hold);
+    const span = Math.max(0.01, Math.min(glide.span ?? 0.1, glide.at));
+    param.setValueAtTime(value, Math.max(time, arrive - span));
+    value = unit * rateForInterval(baseMidi, glide.midi);
+    param.exponentialRampToValueAtTime(value, arrive);
+  }
+}
+
+function addVibrato(target, time, startAt, stopAt) {
   const ctx = getAudioContext();
+  const lfo = ctx.createOscillator();
+  const depth = ctx.createGain();
+  lfo.frequency.value = VIBRATO_HZ;
+  // Ease the wobble in so the attack still reads as one clear pitch.
+  const from = time + Math.max(0, startAt);
+  depth.gain.setValueAtTime(0, time);
+  depth.gain.setValueAtTime(0, from);
+  depth.gain.linearRampToValueAtTime(VIBRATO_CENTS, from + 0.25);
+  lfo.connect(depth);
+  depth.connect(target);
+  lfo.start(time);
+  lfo.stop(stopAt);
+  track(lfo);
+}
+
+// A harmonic rings like a small bell: a sine with a touch of octave, dying
+// out on its own rather than being held.
+function chime({ midi, time, duration, velocity, vibratoAt, glides }) {
+  const ctx = getAudioContext();
+  const frequency = midiToFrequency(midi);
+  const length = Math.max(0.3, Math.min(HARMONIC_SECONDS, duration + 0.2));
+  const stopAt = time + length;
+  const gain = ctx.createGain();
+  const level = Math.max(0.05, Math.min(1, velocity)) * 0.35;
+  gain.gain.setValueAtTime(level, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, stopAt);
+  gain.connect(instrumentBus());
+  const partials = [
+    { ratio: 1, level: 1 },
+    { ratio: 2, level: 0.18 },
+  ];
+  for (const partial of partials) {
+    const oscillator = ctx.createOscillator();
+    oscillator.type = "sine";
+    scheduleGlides(oscillator.frequency, frequency * partial.ratio, midi, glides, time, length);
+    const partialGain = ctx.createGain();
+    partialGain.gain.value = partial.level;
+    oscillator.connect(partialGain);
+    partialGain.connect(gain);
+    if (vibratoAt !== null && vibratoAt !== undefined) addVibrato(oscillator.detune, time, vibratoAt, stopAt);
+    oscillator.start(time);
+    oscillator.stop(stopAt);
+    track(oscillator);
+  }
+}
+
+export function pluck({ midi, time, duration = 2, velocity = 1, legato = false, harmonic = false, vibratoAt = null, glides = [] }) {
+  const ctx = getAudioContext();
+  const baseMidi = Math.round(midi);
+  if (harmonic) {
+    chime({ midi: baseMidi, time, duration, velocity, vibratoAt, glides });
+    return;
+  }
   const source = ctx.createBufferSource();
-  source.buffer = pluckBuffer(Math.round(midi));
+  source.buffer = pluckBuffer(baseMidi);
   const gain = ctx.createGain();
   const level = Math.max(0.05, Math.min(1, velocity)) * 0.5;
   const hold = Math.max(0.08, Math.min(PLUCK_SECONDS - 0.3, duration));
-  gain.gain.setValueAtTime(level, time);
+  const stopAt = time + hold + 0.2;
+  if (legato) {
+    gain.gain.setValueAtTime(0.001, time);
+    gain.gain.exponentialRampToValueAtTime(level, time + LEGATO_FADE_SECONDS);
+  } else {
+    gain.gain.setValueAtTime(level, time);
+  }
   gain.gain.setValueAtTime(level, time + hold);
   gain.gain.exponentialRampToValueAtTime(0.001, time + hold + 0.18);
-  source.connect(gain);
-  gain.connect(master);
+
+  scheduleGlides(source.playbackRate, 1, baseMidi, glides, time, hold);
+
+  if (legato) {
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = LEGATO_CUTOFF_HZ;
+    source.connect(filter);
+    filter.connect(gain);
+  } else {
+    source.connect(gain);
+  }
+  gain.connect(instrumentBus());
+
+  if (vibratoAt !== null && vibratoAt !== undefined) addVibrato(source.detune, time, vibratoAt, stopAt);
+
   source.start(time);
-  source.stop(time + hold + 0.2);
+  source.stop(stopAt);
   track(source);
 }
 
