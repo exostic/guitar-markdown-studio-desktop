@@ -138,3 +138,37 @@ test("rhythmToEvents : un clic par temps, frappes réparties, silences muets", (
   const strums = events.filter(e => e.kind === "strum");
   assert.deepEqual(strums.map(s => [s.beat, s.direction, s.ghost]), [[0, "down", false], [0.5, "up", false], [1, "down", true], [2, "up", false]]);
 });
+
+test("tabToEvents : un accord s'égrène corde grave d'abord, chaque note connaît sa corde", () => {
+  const ast = parseAsciiTab(`e|0-------|
+B|1-------|
+G|0-------|
+D|2-------|
+A|3-------|
+E|--------|`);
+  const plucks = tabToEvents(ast, { tuning }).events.filter(e => e.kind === "pluck");
+  assert.deepEqual(plucks.map(p => p.string), [5, 4, 3, 2, 1]);
+  assert.deepEqual(plucks.map(p => Math.round((p.offset ?? 0) * 1000)), [0, 12, 24, 36, 48]);
+  assert.ok(plucks.every(p => p.beat === 0));
+  const single = tabToEvents(parseAsciiTab(`e|--3--|
+B|-----|
+G|-----|
+D|-----|
+A|-----|
+E|-----|`), { tuning }).events.filter(e => e.kind === "pluck");
+  assert.equal(single[0].offset, undefined);
+});
+
+test("tabToEvents : les glissés portent leur type pour le bruit de doigt", () => {
+  const ast = parseAsciiTab(`e|5/7--9b--7br--|
+B|--------------|
+G|--------------|
+D|--------------|
+A|--------------|
+E|--------------|`);
+  const plucks = tabToEvents(ast, { tuning }).events.filter(e => e.kind === "pluck");
+  assert.deepEqual(plucks[0].glides.map(g => g.type), ["slide-up"]);
+  assert.deepEqual(plucks[1].glides.map(g => g.type), ["bend"]);
+  assert.deepEqual(plucks[2].glides.map(g => g.type), ["bend", "release"]);
+  assert.deepEqual(shapeToEvents(["x", 3, 2, 0, 1, 0], { tuning }).map(e => e.string), [5, 4, 3, 2, 1]);
+});

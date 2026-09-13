@@ -14,10 +14,11 @@ function fire(event, time, secondsPerBeat) {
       time,
       duration: (event.duration ?? 1) * secondsPerBeat,
       velocity: event.velocity ?? 1,
+      string: event.string ?? null,
       legato: Boolean(event.legato),
       harmonic: Boolean(event.harmonic),
       vibratoAt: event.vibratoAt === undefined ? null : event.vibratoAt * secondsPerBeat,
-      glides: event.glides?.map(glide => ({ midi: glide.midi, at: glide.beat * secondsPerBeat, span: glide.span * secondsPerBeat })),
+      glides: event.glides?.map(glide => ({ midi: glide.midi, type: glide.type, at: glide.beat * secondsPerBeat, span: glide.span * secondsPerBeat })),
     });
   } else if (event.kind === "click") {
     click({ time, accent: Boolean(event.accent) });
@@ -70,7 +71,8 @@ export function createTransport() {
           nextIndex = 0;
         }
         const event = sorted[nextIndex];
-        const time = startTime + (event.beat + iteration * totalBeats) * secondsPerBeat;
+        // `offset` is in seconds: strum spread should not stretch with the tempo.
+        const time = startTime + (event.beat + iteration * totalBeats) * secondsPerBeat + (event.offset ?? 0);
         if (time > horizon) break;
         fire(event, time, secondsPerBeat);
         if (event.cue !== undefined) cues.push({ time, cue: event.cue });

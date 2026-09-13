@@ -11,7 +11,9 @@
 //   - hammer-ons, pull-offs and taps pluck the arrival softly without a pick
 //     attack (`legato`);
 //   - vibrato wobbles its note (`vibratoAt`, in beats after the voice starts);
-//   - ghost notes `(8)` play quietly, harmonics `<12>` ring as a chime.
+//   - ghost notes `(8)` play quietly, harmonics `<12>` ring as a chime;
+//   - notes stacked in one column are a chord: they fan out low string
+//     first by a few milliseconds (`offset`, seconds) like a down-stroke.
 import { harmonicSemitones, stringMidi } from "@gms/guitar-markdown";
 
 const PITCH_TECHNIQUES = new Set(["slide-up", "slide-down", "bend", "release"]);
@@ -19,6 +21,7 @@ const LEGATO_TECHNIQUES = new Set(["hammer", "pull", "tap"]);
 const MAX_RING_BEATS = 4;
 const GHOST_VELOCITY = 0.45;
 const BEND_SEMITONES = 2;
+const STRUM_STAGGER_SECONDS = 0.012;
 
 export function parseTimeSignature(timeSignature) {
   const match = /^(\d+)\s*\/\s*(\d+)$/.exec(timeSignature ?? "4/4");
@@ -55,11 +58,11 @@ function ornamentGlides(types, midi, ringBeats) {
   const glides = [];
   const up = Math.min(0.5, ringBeats * 0.4);
   if (types.has("bend") || types.has("bend-release")) {
-    glides.push({ midi: midi + BEND_SEMITONES, beat: up, span: up });
+    glides.push({ midi: midi + BEND_SEMITONES, beat: up, span: up, type: "bend" });
   }
   if (types.has("bend-release")) {
     const down = Math.min(ringBeats * 0.85, up + 0.6);
-    glides.push({ midi, beat: down, span: Math.max(0.05, (down - up) * 0.6) });
+    glides.push({ midi, beat: down, span: Math.max(0.05, (down - up) * 0.6), type: "release" });
   }
   return glides;
 }
@@ -88,7 +91,9 @@ export function tabToEvents(ast, { tuning, capo = 0, timeSignature } = {}) {
     measure.events.forEach((event, eventIndex) => {
       const onset = base + event.offset * measureBeats;
       let muted = false;
-      for (const position of event.positions) {
+      let order = 0;
+      const positions = [...event.positions].sort((a, b) => b.string - a.string);
+      for (const position of positions) {
         if (position.fret === "x") {
           muted = true;
           continue;
@@ -112,7 +117,7 @@ export function tabToEvents(ast, { tuning, capo = 0, timeSignature } = {}) {
           if (!targetPosition || targetPosition.fret === "x") break;
           const gapBeats = (target.offset - lastOffset) * measureBeats;
           const arriveBeat = (target.offset - event.offset) * measureBeats;
-          glides.push({ midi: fretMidi(targetPosition, tuning, capo), beat: arriveBeat, span: glideSpan(link.type, gapBeats) });
+          glides.push({ midi: fretMidi(targetPosition, tuning, capo), beat: arriveBeat, span: glideSpan(link.type, gapBeats), type: link.type });
           if (vibratoAt === null && ornamentsAt(link.toEvent, position.string).has("vibrato")) vibratoAt = arriveBeat;
           lastIndex = link.toEvent;
           lastOffset = target.offset;
@@ -124,7 +129,9 @@ export function tabToEvents(ast, { tuning, capo = 0, timeSignature } = {}) {
           glides.push(...ornamentGlides(ornamentsAt(eventIndex, position.string), midi, ring));
         }
         const velocity = position.ghost ? GHOST_VELOCITY : legato ? 0.6 : 1;
-        const pluck = { beat: onset, kind: "pluck", midi, duration: ring, velocity };
+        const pluck = { beat: onset, kind: "pluck", midi, string: position.string, duration: ring, velocity };
+        if (order > 0) pluck.offset = order * STRUM_STAGGER_SECONDS;
+        order += 1;
         if (legato) pluck.legato = true;
         if (position.harmonic) pluck.harmonic = true;
         if (vibratoAt !== null) pluck.vibratoAt = vibratoAt;

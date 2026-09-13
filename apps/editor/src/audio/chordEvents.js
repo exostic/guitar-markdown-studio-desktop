@@ -9,7 +9,7 @@ export function shapeToEvents(frets, { tuning, capo = 0, beat = 0, duration = 2,
   const ordered = direction === "down" ? played : [...played].reverse();
   ordered.forEach((entry, order) => {
     const midi = stringMidi(tuning, entry.string, Number(entry.fret), capo);
-    events.push({ beat: beat + order * STRUM_SPREAD_BEATS, kind: "pluck", midi, duration, velocity });
+    events.push({ beat: beat + order * STRUM_SPREAD_BEATS, kind: "pluck", midi, string: entry.string, duration, velocity });
   });
   return events;
 }

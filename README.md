@@ -200,7 +200,7 @@ En mode Web, six boutons jouent la note de chaque corde à vide. En mode Livre/P
 
 En mode Web, un bouton **▶ Écouter** apparaît au-dessus des blocs `tab`, `partition`, `chords`, `grid` et `rhythm` :
 
-- tablature / partition : chaque note est jouée par une corde pincée synthétisée (Karplus-Strong), au tempo du front matter, la mesure en cours est surlignée ;
+- tablature / partition : chaque note est jouée par une corde pincée synthétisée (Karplus-Strong, une couleur par corde, caisse de résonance et pièce synthétisées, accords égrenés et jeu légèrement humanisé), au tempo du front matter, la mesure en cours est surlignée ;
 - accords : chaque diagramme est gratté tour à tour (un clic sur un diagramme le gratte seul) ;
 - grille : un accord par mesure (reprises et `xN` respectés, chiffres romains résolus dans la tonalité) ;
 - rythmique : la frappe en boucle avec le métronome, la frappe en cours est surlignée.

@@ -1,24 +1,33 @@
 // Web Audio engine: one shared AudioContext, a Karplus-Strong plucked string
-// (pre-rendered into cached buffers — a DelayNode feedback loop would be
-// quantised to 128-sample blocks and drift out of tune above ~300 Hz), a
-// metronome click and a noise-burst strum for rhythm patterns.
+// (pre-rendered into cached buffers, see string.js), synthesised body, room
+// and cabinet impulse responses (impulse.js), a metronome click and a
+// noise-burst strum for rhythm patterns.
 import { midiToFrequency } from "@gms/guitar-markdown";
+import { renderBodyImpulse, renderCabinetImpulse, renderRoomImpulse } from "./impulse.js";
+import { guessString, renderPluck } from "./string.js";
 
 let context = null;
 let master = null;
 const bufferCache = new Map();
 const activeVoices = new Set();
 
-// Instrument sound: the plucked string is the same, what changes is the
-// "amp" it goes through. `acoustic` is the bare string; `electric` rolls off
-// the top like a pickup into a clean amp; `distortion` drives every voice
-// through one shared waveshaper (chords intermodulate like on a real amp)
-// and a cabinet-style low-pass.
+// Instrument sound: the plucked string is the same, what changes is what it
+// goes through. `acoustic` adds a guitar body; `electric` rolls off the top
+// like a pickup into a clean amp and cabinet; `distortion` drives every
+// voice through one shared waveshaper (chords intermodulate like on a real
+// amp) then the cabinet. All three get a touch of room.
 export const SOUNDS = ["acoustic", "electric", "distortion"];
 let currentSound = "acoustic";
 const buses = new Map();
 
 const PLUCK_SECONDS = 3;
+// Each (pitch, string) is rendered a few times with different noise so
+// repeated notes are not stamped out of one mould.
+const PLUCK_VARIANTS = 2;
+const BUFFER_CACHE_LIMIT = 96;
+// Human timing: a few milliseconds early or late, a little softer sometimes.
+const HUMAN_JITTER_SECONDS = 0.004;
+const HUMAN_VELOCITY_SPREAD = 0.1;
 
 export function getAudioContext() {
   if (!context) {
@@ -73,39 +82,63 @@ function biquad(ctx, type, frequency, q = 0.7) {
   return filter;
 }
 
+function gainNode(value) {
+  const node = getAudioContext().createGain();
+  node.gain.value = value;
+  return node;
+}
+
 function chain(nodes) {
   for (let i = 0; i < nodes.length - 1; i += 1) nodes[i].connect(nodes[i + 1]);
-  return nodes[0];
+  return nodes[nodes.length - 1];
+}
+
+// Two independent renders make a stereo pair, which is what gives the
+// acoustic its width.
+function convolver(render) {
+  const ctx = getAudioContext();
+  const left = render({ sampleRate: ctx.sampleRate });
+  const right = render({ sampleRate: ctx.sampleRate });
+  const buffer = ctx.createBuffer(2, left.length, ctx.sampleRate);
+  buffer.copyToChannel(left, 0);
+  buffer.copyToChannel(right, 1);
+  const node = ctx.createConvolver();
+  node.normalize = false;
+  node.buffer = buffer;
+  return node;
+}
+
+// `from` reaches the master twice: straight, and through an impulse response.
+function mixToMaster(from, render, dry, wet) {
+  chain([from, gainNode(dry), master]);
+  chain([from, convolver(render), gainNode(wet), master]);
 }
 
 function buildBus(name) {
   const ctx = getAudioContext();
   const input = ctx.createGain();
   if (name === "electric") {
-    const level = ctx.createGain();
-    level.gain.value = 1.1;
-    chain([input, biquad(ctx, "highpass", 70), biquad(ctx, "lowpass", 3800, 0.9), level, master]);
+    const amp = chain([input, biquad(ctx, "highpass", 70), biquad(ctx, "lowpass", 4500, 0.8), convolver(renderCabinetImpulse), gainNode(1.1)]);
+    mixToMaster(amp, renderRoomImpulse, 0.85, 0.25);
   } else if (name === "distortion") {
-    const drive = ctx.createGain();
-    drive.gain.value = 14;
+    const drive = gainNode(14);
     const shaper = ctx.createWaveShaper();
     shaper.curve = distortionCurve(6);
     shaper.oversample = "4x";
-    const level = ctx.createGain();
-    level.gain.value = 0.28;
-    chain([
+    const amp = chain([
       input,
       biquad(ctx, "highpass", 90),
       drive,
       shaper,
       // Cabinet: tame the fizz, add a little body around 500 Hz.
       biquad(ctx, "peaking", 500, 1),
-      biquad(ctx, "lowpass", 3200, 0.8),
-      level,
-      master,
+      convolver(renderCabinetImpulse),
+      biquad(ctx, "lowpass", 3800, 0.8),
+      gainNode(0.28),
     ]);
+    mixToMaster(amp, renderRoomImpulse, 0.85, 0.2);
   } else {
-    input.connect(master);
+    mixToMaster(input, renderBodyImpulse, 0.8, 0.5);
   }
   return input;
 }
@@ -115,36 +148,21 @@ function instrumentBus() {
   return buses.get(currentSound);
 }
 
-function pluckBuffer(midi) {
+function pluckBuffer(midi, string, variant) {
   const ctx = getAudioContext();
-  const cacheKey = `${midi}@${ctx.sampleRate}`;
-  if (bufferCache.has(cacheKey)) return bufferCache.get(cacheKey);
-  const sampleRate = ctx.sampleRate;
-  const frequency = midiToFrequency(midi);
-  const period = Math.max(2, Math.round(sampleRate / frequency));
-  const length = Math.round(sampleRate * PLUCK_SECONDS);
-  const buffer = ctx.createBuffer(1, length, sampleRate);
-  const data = buffer.getChannelData(0);
-  const ring = new Float32Array(period);
-  // Slightly low-passed noise as the excitation: a raw white burst sounds
-  // like a harpsichord, a softened one closer to a fingered nylon/steel string.
-  let previous = 0;
-  for (let i = 0; i < period; i += 1) {
-    const noise = Math.random() * 2 - 1;
-    ring[i] = (noise + previous) * 0.5;
-    previous = noise;
+  const cacheKey = `${midi}:${string}:${variant}@${ctx.sampleRate}`;
+  const cached = bufferCache.get(cacheKey);
+  if (cached) {
+    // Most recently used goes last, so the eviction below drops the stalest.
+    bufferCache.delete(cacheKey);
+    bufferCache.set(cacheKey, cached);
+    return cached;
   }
-  // Per-sample loss so that low notes fade over ~2.5 s. Higher notes decay
-  // faster on their own because the two-point average damps them harder.
-  const decay = Math.exp(Math.log(0.01) / (sampleRate * 2.5));
-  for (let n = 0; n < length; n += 1) {
-    const index = n % period;
-    const next = (n + 1) % period;
-    const sample = ring[index];
-    data[n] = sample;
-    ring[index] = (sample + ring[next]) * 0.5 * decay;
-  }
+  const data = renderPluck({ midi, string, sampleRate: ctx.sampleRate, seconds: PLUCK_SECONDS });
+  const buffer = ctx.createBuffer(1, data.length, ctx.sampleRate);
+  buffer.copyToChannel(data, 0);
   bufferCache.set(cacheKey, buffer);
+  if (bufferCache.size > BUFFER_CACHE_LIMIT) bufferCache.delete(bufferCache.keys().next().value);
   return buffer;
 }
 
@@ -231,44 +249,71 @@ function chime({ midi, time, duration, velocity, vibratoAt, glides }) {
   }
 }
 
-export function pluck({ midi, time, duration = 2, velocity = 1, legato = false, harmonic = false, vibratoAt = null, glides = [] }) {
+// Short filtered noise into the instrument bus: the sounds a hand makes on
+// the strings besides the note itself.
+function noiseCue({ time, seconds, level, filter }) {
+  const ctx = getAudioContext();
+  const source = ctx.createBufferSource();
+  source.buffer = getNoiseBuffer();
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(level, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + seconds);
+  chain([source, filter, gain, instrumentBus()]);
+  source.start(time);
+  source.stop(time + seconds + 0.01);
+  track(source);
+}
+
+// The pick leaving the string: a bright click just before the tone.
+function pickTransient(time, velocity) {
+  noiseCue({ time, seconds: 0.006, level: 0.05 * velocity, filter: biquad(getAudioContext(), "highpass", 2500) });
+}
+
+// Finger squeak as the hand moves along the string for a slide.
+function slideNoise(time, velocity) {
+  noiseCue({ time, seconds: 0.05, level: 0.04 * velocity, filter: biquad(getAudioContext(), "bandpass", 1500, 2.5) });
+}
+
+export function pluck({ midi, time, duration = 2, velocity = 1, string = null, legato = false, harmonic = false, vibratoAt = null, glides = [] }) {
   const ctx = getAudioContext();
   const baseMidi = Math.round(midi);
+  const humanVelocity = velocity * (1 - HUMAN_VELOCITY_SPREAD * Math.random());
+  const onset = Math.max(ctx.currentTime, time + (Math.random() * 2 - 1) * HUMAN_JITTER_SECONDS);
   if (harmonic) {
-    chime({ midi: baseMidi, time, duration, velocity, vibratoAt, glides });
+    chime({ midi: baseMidi, time: onset, duration, velocity: humanVelocity, vibratoAt, glides });
     return;
   }
   const source = ctx.createBufferSource();
-  source.buffer = pluckBuffer(baseMidi);
+  source.buffer = pluckBuffer(baseMidi, string ?? guessString(baseMidi), Math.floor(Math.random() * PLUCK_VARIANTS));
   const gain = ctx.createGain();
-  const level = Math.max(0.05, Math.min(1, velocity)) * 0.5;
+  const level = Math.max(0.05, Math.min(1, humanVelocity)) * 0.5;
   const hold = Math.max(0.08, Math.min(PLUCK_SECONDS - 0.3, duration));
-  const stopAt = time + hold + 0.2;
+  const stopAt = onset + hold + 0.2;
   if (legato) {
-    gain.gain.setValueAtTime(0.001, time);
-    gain.gain.exponentialRampToValueAtTime(level, time + LEGATO_FADE_SECONDS);
+    gain.gain.setValueAtTime(0.001, onset);
+    gain.gain.exponentialRampToValueAtTime(level, onset + LEGATO_FADE_SECONDS);
   } else {
-    gain.gain.setValueAtTime(level, time);
+    gain.gain.setValueAtTime(level, onset);
   }
-  gain.gain.setValueAtTime(level, time + hold);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + hold + 0.18);
+  gain.gain.setValueAtTime(level, onset + hold);
+  gain.gain.exponentialRampToValueAtTime(0.001, onset + hold + 0.18);
 
-  scheduleGlides(source.playbackRate, 1, baseMidi, glides, time, hold);
+  scheduleGlides(source.playbackRate, 1, baseMidi, glides, onset, hold);
 
-  if (legato) {
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = LEGATO_CUTOFF_HZ;
-    source.connect(filter);
-    filter.connect(gain);
-  } else {
-    source.connect(gain);
+  // Soft picking is darker as well as quieter; a hammered note has no pick
+  // edge at all.
+  const tone = biquad(ctx, "lowpass", legato ? LEGATO_CUTOFF_HZ : 2200 + 9000 * humanVelocity ** 2, 0.7);
+  chain([source, tone, gain, instrumentBus()]);
+
+  if (!legato) pickTransient(onset, humanVelocity);
+  for (const glide of glides) {
+    if (glide.type === "slide-up" || glide.type === "slide-down") {
+      slideNoise(onset + Math.max(0, Math.min(glide.at, hold) - (glide.span ?? 0.1)), humanVelocity);
+    }
   }
-  gain.connect(instrumentBus());
+  if (vibratoAt !== null && vibratoAt !== undefined) addVibrato(source.detune, onset, vibratoAt, stopAt);
 
-  if (vibratoAt !== null && vibratoAt !== undefined) addVibrato(source.detune, time, vibratoAt, stopAt);
-
-  source.start(time);
+  source.start(onset);
   source.stop(stopAt);
   track(source);
 }
