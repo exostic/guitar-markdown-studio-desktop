@@ -161,6 +161,10 @@ function addMeasureBackground(group, topStave, bottomStave) {
   rect.setAttribute("width", String(top.getW()));
   rect.setAttribute("height", String(bottom.getY() + bottom.getH() - top.getY()));
   rect.setAttribute("fill", "transparent");
+  // VexFlow copies its drawing attributes (stroke="black", …) onto every group
+  // it opens, and the rect would inherit them and draw a frame around the
+  // measure — so opt out of the stroke explicitly.
+  rect.setAttribute("stroke", "none");
   group.prepend(rect);
 }
 

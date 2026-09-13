@@ -1260,6 +1260,7 @@ pre {
 }
 .measure-bg {
   fill: transparent;
+  stroke: none;
   transition: fill 0.12s ease-out;
 }
 [data-measure].playing .measure-bg {
