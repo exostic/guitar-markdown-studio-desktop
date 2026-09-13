@@ -1013,6 +1013,7 @@ button:focus-visible,
 .stroke.stroke-rest {
   display: inline-block;
   width: 0.65em;
+  height: 1em;
 }
 .beat-number {
   font-size: calc(0.95rem * var(--rhythm-scale));
