@@ -1182,3 +1182,282 @@ pre {
     margin: 14mm 15mm;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Theory & audio modules (scale captions, key chart, circle of fifths, tuner,
+   roman-numeral grids, playback buttons and highlights)
+   --------------------------------------------------------------------------- */
+
+/* Web-only vs print-only variants, same idea as .link-web / .link-print.
+   `export-static` marks the standalone HTML export, which ships no JS. */
+.course-page:not(.web-mode) .block-web,
+.course-page.export-static .block-web {
+  display: none !important;
+}
+.course-page.web-mode:not(.export-static) .block-print {
+  display: none;
+}
+
+.block-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 0.35rem;
+}
+.play-button,
+.tuner-string {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  background: var(--doc-tint);
+  color: var(--doc-accent);
+  border: 1px solid var(--doc-tint-border);
+  cursor: pointer;
+  line-height: 1.2;
+}
+.play-button:hover,
+.tuner-string:hover {
+  border-color: var(--doc-accent);
+}
+.play-button.active,
+.tuner-string.playing {
+  background: var(--doc-accent);
+  color: #fff;
+  border-color: var(--doc-accent);
+}
+.chord-grid-wrapper,
+.rhythm-wrapper {
+  margin: 1rem 0 1.5rem;
+}
+.chord-grid-wrapper > .chord-grid,
+.rhythm-wrapper > .rhythm-block {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Playback highlights */
+.grid-cell.playing {
+  background: var(--doc-tint);
+  box-shadow: inset 0 -3px 0 var(--doc-primary);
+}
+.stroke.playing {
+  color: var(--doc-primary);
+  transform: scale(1.15);
+}
+.svguitar-item.playing {
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 2px rgb(228 59 125 / 0.25);
+}
+.measure-bg {
+  fill: transparent;
+  transition: fill 0.12s ease-out;
+}
+[data-measure].playing .measure-bg {
+  fill: rgb(228 59 125 / 0.12);
+}
+
+/* Scale caption */
+.scale-caption {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--doc-muted);
+}
+.scale-caption strong {
+  color: var(--doc-heading);
+}
+
+/* Roman-numeral grid cells */
+.grid-chord {
+  display: block;
+}
+.grid-numeral {
+  display: block;
+  font-size: 0.45em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--doc-soft);
+  margin-top: 0.1em;
+}
+.grid-sounding {
+  font-size: 0.5em;
+  font-weight: 500;
+  color: var(--doc-muted);
+  margin-left: 0.3em;
+}
+.grid-cell-split .grid-numeral {
+  font-size: 0.5em;
+}
+
+/* Key chart */
+.key-chart-block {
+  break-inside: avoid;
+}
+.key-chart {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.key-chart caption {
+  caption-side: top;
+  text-align: left;
+  padding: 0 0 0.4rem;
+  color: var(--doc-heading);
+  font-size: 1rem;
+}
+.key-chart-solfege {
+  color: var(--doc-muted);
+  font-weight: 400;
+}
+.key-chart th,
+.key-chart td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--doc-line);
+  text-align: left;
+}
+.key-chart th {
+  background: var(--doc-tint);
+  color: var(--doc-accent);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.key-chart .key-numeral {
+  font-weight: 700;
+  color: var(--doc-heading);
+}
+.key-chart .key-chord {
+  font-weight: 700;
+  color: var(--doc-ink);
+}
+.key-chart .key-notes,
+.key-chart .key-function {
+  color: var(--doc-muted);
+}
+.key-chart-caption {
+  margin-top: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--doc-muted);
+}
+
+/* Circle of fifths */
+.circle-block {
+  text-align: center;
+  break-inside: avoid;
+}
+.circle-of-fifths {
+  max-width: 320px;
+  width: 100%;
+  height: auto;
+}
+.cof-sector {
+  fill: #fff;
+  stroke: var(--doc-tint-border);
+  stroke-width: 1;
+}
+.cof-sector.cof-minor {
+  fill: var(--doc-tint);
+}
+.cof-sector.cof-neighbor {
+  fill: #ede7fa;
+}
+.cof-sector.cof-key {
+  fill: var(--doc-primary);
+}
+.cof-label {
+  font-size: 15px;
+  font-weight: 700;
+  fill: var(--doc-heading);
+  pointer-events: none;
+}
+.cof-label-minor {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--doc-accent);
+}
+.cof-label.cof-label-active {
+  fill: #fff;
+}
+.cof-centre {
+  font-size: 22px;
+  font-weight: 800;
+  fill: var(--doc-heading);
+}
+.cof-centre-sub {
+  font-size: 11px;
+  fill: var(--doc-muted);
+}
+.circle-caption {
+  margin-top: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--doc-muted);
+}
+
+/* Tuner */
+.tuner-block {
+  break-inside: avoid;
+}
+.tuner-header {
+  margin-bottom: 0.5rem;
+  color: var(--doc-heading);
+}
+.tuner-tuning {
+  color: var(--doc-muted);
+  margin-left: 0.4rem;
+}
+.tuner-strings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.tuner-string {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 4.6rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.75rem;
+}
+.tuner-number {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+.tuner-note {
+  font-size: 1.05rem;
+}
+.tuner-frequency {
+  font-size: 0.68rem;
+  font-weight: 500;
+  opacity: 0.8;
+}
+.tuner-table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.tuner-table th,
+.tuner-table td {
+  padding: 0.3rem 0.8rem;
+  border-bottom: 1px solid var(--doc-line);
+  text-align: left;
+}
+.tuner-table th {
+  background: var(--doc-tint);
+  color: var(--doc-accent);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+@media print {
+  .block-toolbar,
+  .block-web,
+  .play-button {
+    display: none !important;
+  }
+  .block-print {
+    display: table;
+  }
+  .measure-bg,
+  .playing .measure-bg {
+    fill: transparent;
+  }
+}

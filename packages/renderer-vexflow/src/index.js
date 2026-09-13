@@ -148,6 +148,22 @@ function computeMeasureWidths(measureWidth, count, firstMeasureOverhead) {
   return Array.from({ length: count }, (_, index) => (index === 0 ? measureWidth + firstMeasureOverhead : measureWidth));
 }
 
+// Wraps each measure's drawing in a <g data-measure="…"> with a transparent
+// background rect spanning the stave(s), so playback can tint the measure
+// being played (CSS: [data-measure].playing .measure-bg).
+function addMeasureBackground(group, topStave, bottomStave) {
+  const top = topStave.getBoundingBox();
+  const bottom = bottomStave.getBoundingBox();
+  const rect = document.createElementNS(SVG_NS, "rect");
+  rect.setAttribute("class", "measure-bg");
+  rect.setAttribute("x", String(top.getX()));
+  rect.setAttribute("y", String(top.getY()));
+  rect.setAttribute("width", String(top.getW()));
+  rect.setAttribute("height", String(bottom.getY() + bottom.getH() - top.getY()));
+  rect.setAttribute("fill", "transparent");
+  group.prepend(rect);
+}
+
 function renderRow(container, measures, options) {
   const measureWidth = options.measureWidth;
   const height = options.height;
@@ -167,6 +183,8 @@ function renderRow(container, measures, options) {
   let cursorX = 0;
   measures.forEach((measure, index) => {
     const width = widths[index];
+    const group = context.openGroup("measure");
+    group.setAttribute("data-measure", String(measure.index));
     const stave = new TabStave(cursorX, 8, width, {
       spaceAboveStaffLn: 2,
       leftBar: index === 0,
@@ -174,9 +192,13 @@ function renderRow(container, measures, options) {
     cursorX += width;
     if (index === 0) stave.addClef("tab");
     stave.setContext(context).draw();
+    addMeasureBackground(group, stave, stave);
 
     const notes = createMeasureNotes(measure);
-    if (!notes.length) return;
+    if (!notes.length) {
+      context.closeGroup();
+      return;
+    }
 
     const voice = new Voice({ numBeats, beatValue }).setMode(Voice.Mode.SOFT);
     voice.addTickables(notes);
@@ -187,6 +209,7 @@ function renderRow(container, measures, options) {
       const connector = connectorForTechnique(technique, notes);
       connector?.setContext(context).draw();
     }
+    context.closeGroup();
   });
   shrinkSvgToContent(container);
 }
@@ -225,6 +248,8 @@ function renderScoreRow(container, measures, options) {
     const width = widths[index];
     const x = cursorX;
     cursorX += width;
+    const group = context.openGroup("measure");
+    group.setAttribute("data-measure", String(measure.index));
     const notationStave = new Stave(x, 0, width, { leftBar: index === 0 });
     const tabStave = new TabStave(x, notationHeight, width, {
       spaceAboveStaffLn: 2,
@@ -239,10 +264,14 @@ function renderScoreRow(container, measures, options) {
     Stave.formatBegModifiers([notationStave, tabStave]);
     notationStave.setContext(context).draw();
     tabStave.setContext(context).draw();
+    addMeasureBackground(group, notationStave, tabStave);
 
     const tabNotes = createMeasureNotes(measure, { annotateChord: false });
     const standardNotes = createStandardNotes(measure);
-    if (!tabNotes.length) return;
+    if (!tabNotes.length) {
+      context.closeGroup();
+      return;
+    }
 
     const tabVoice = new Voice({ numBeats, beatValue }).setMode(Voice.Mode.SOFT);
     tabVoice.addTickables(tabNotes);
@@ -263,6 +292,7 @@ function renderScoreRow(container, measures, options) {
       const connector = connectorForTechnique(technique, tabNotes);
       connector?.setContext(context).draw();
     }
+    context.closeGroup();
   });
 
   if (firstNotationStave && firstTabStave) {

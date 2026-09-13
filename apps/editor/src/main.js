@@ -8,6 +8,8 @@ import { renderMarkdown, parseFrontMatter, renderQrSvg } from "./markdown.js";
 import { renderTablatureSvg, renderScoreSvg } from "@gms/renderer-vexflow";
 import { renderChordDiagrams } from "@gms/renderer-svguitar";
 import { renderFretboardScale } from "@gms/renderer-fretboard";
+import { parseTuning } from "@gms/guitar-markdown";
+import { bindPlayback, clearRegistry, registerBlock, stopAll } from "./audio/playback.js";
 import LZString from "lz-string";
 import { Bravura } from "../../../node_modules/vexflow/build/esm/src/fonts/bravura.js";
 import { Academico } from "../../../node_modules/vexflow/build/esm/src/fonts/academico.js";
@@ -87,6 +89,14 @@ app.innerHTML = `
     </div>
     <span class="insert-divider"></span>
     <div class="insert-group">
+      <button data-insert="scale">Gamme</button>
+      <button data-insert="arpeggio">Arpège</button>
+      <button data-insert="key">Tonalité</button>
+      <button data-insert="circle">Cercle des quintes</button>
+      <button data-insert="tuner">Accordeur</button>
+    </div>
+    <span class="insert-divider"></span>
+    <div class="insert-group">
       <button data-insert="pagebreak">Saut de page</button>
       <button data-insert="landscapebreak">Saut de page (mode optimisé)</button>
       <button data-insert="columnbreak">Saut de colonne (mode optimisé)</button>
@@ -159,6 +169,11 @@ const snippets = {
   chords: `\n\`\`\`chords\nAm x02210\nC  x32010\nG  320003\n\`\`\`\n`,
   rhythm: `\n\`\`\`rhythm\nB H | B h | B H | h B\n\`\`\`\n`,
   grid: `\n\`\`\`grid\n| Am | F | C | G |\n\`\`\`\n`,
+  scale: `\n\`\`\`scale\nscale: A minor pentatonic\nposition: 1\nlabels: notes\n\`\`\`\n`,
+  arpeggio: `\n\`\`\`scale\narpeggio: Am7\nfrets: 0-12\n\`\`\`\n`,
+  key: `\n\`\`\`key G\n\`\`\`\n`,
+  circle: `\n\`\`\`circle G\n\`\`\`\n`,
+  tuner: `\n\`\`\`tuner\n\`\`\`\n`,
   pagebreak: `\n\`\`\`pagebreak\n\`\`\`\n`,
   landscapebreak: `\n\`\`\`landscapebreak\n\`\`\`\n`,
   columnbreak: `\n\`\`\`columnbreak\n\`\`\`\n`,
@@ -193,7 +208,9 @@ function drawPending(renders) {
   // widths (not responsive to the window), so a plain fixed cap applies there
   // instead of the dynamic width measurement.
   const measuresPerRow = webMode ? computeMeasuresPerRow() : PRINT_MODE_MEASURES_PER_ROW;
+  clearRegistry();
   for (const render of renders) {
+    registerBlock(render.id, render);
     const target = document.getElementById(render.id);
     if (!target) continue;
     if (render.type === "tab") renderTablatureSvg(render.ast, target, { measureWidth: NOTATION_MEASURE_WIDTH, height: 130, measuresPerRow });
@@ -657,60 +674,35 @@ function applyEditorWidth() {
   editorPane.style.width = `${width}px`;
 }
 
-let metronomeContext = null;
-let metronomeTimer = null;
-let metronomeActiveButton = null;
+// Playback settings derived from the front matter: tempo (BPM = quarter
+// notes), time signature (a 6/8 bar is 3 quarter-beats), tuning, capo and
+// transposition. Rebuilt on every render; read lazily by the click handler.
+let docSettings = { bpm: 80, timeSignature: "4/4", tuning: parseTuning(""), capo: 0, semitones: 0 };
 
-function playMetronomeClick() {
-  const context = metronomeContext;
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.frequency.value = 1000;
-  gain.gain.setValueAtTime(0.4, context.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.05);
-  oscillator.connect(gain);
-  gain.connect(context.destination);
-  oscillator.start();
-  oscillator.stop(context.currentTime + 0.05);
+function refreshDocSettings(data) {
+  const transposeMatch = /^([+-]?\d+)$/.exec((data.transpose ?? "").trim());
+  docSettings = {
+    bpm: Number(/(\d+(?:\.\d+)?)/.exec(data.tempo ?? "")?.[1]) || 80,
+    timeSignature: data.time ?? "4/4",
+    tuning: parseTuning(data.tuning ?? "") ?? parseTuning(""),
+    capo: Number(/(\d+)/.exec(data.capo ?? "")?.[1] ?? 0),
+    semitones: transposeMatch ? Number(transposeMatch[1]) : 0,
+  };
 }
 
-function stopMetronome() {
-  if (metronomeTimer) {
-    clearInterval(metronomeTimer);
-    metronomeTimer = null;
-  }
-  metronomeActiveButton?.classList.remove("active");
-  metronomeActiveButton = null;
-}
-
-function startMetronome(bpm, button) {
-  stopMetronome();
-  if (!metronomeContext) metronomeContext = new AudioContext();
-  playMetronomeClick();
-  metronomeTimer = setInterval(playMetronomeClick, 60000 / bpm);
-  metronomeActiveButton = button;
-  button.classList.add("active");
-}
-
-preview.addEventListener("click", event => {
-  const button = event.target.closest(".meta-pill-tempo");
-  if (!button) return;
-  const bpm = Number(button.dataset.bpm);
-  if (!bpm) return;
-  if (metronomeActiveButton === button) stopMetronome();
-  else startMetronome(bpm, button);
-});
+bindPlayback({ preview, getSettings: () => docSettings });
 
 function update() {
   try {
-    // The pill button this may be pointing at is about to be destroyed and
-    // rebuilt below — an orphaned interval with no way to click-to-stop it
-    // would otherwise keep clicking forever.
-    stopMetronome();
+    // Any button the transport is pointing at is about to be destroyed and
+    // rebuilt below — an orphaned scheduler with no way to click-to-stop it
+    // would otherwise keep playing forever.
+    stopAll();
     const result = renderMarkdown(editor.value);
     preview.innerHTML = result.html;
     preview.classList.toggle("web-mode", webMode);
     const { data } = parseFrontMatter(editor.value);
+    refreshDocSettings(data);
     // Book/Poster are print-oriented and not clickable — a QR to the same
     // document's Web view lets a reader jump straight to the live version
     // from a printed page. Web mode doesn't need it: it's already that view.
@@ -914,6 +906,7 @@ function setViewMode(mode) {
 }
 
 async function printAsMode(targetMode) {
+  stopAll();
   const previousFitToPage = fitToPage;
   const previousWebMode = webMode;
   fitToPage = targetMode === "landscape";
@@ -932,6 +925,7 @@ async function printAsMode(targetMode) {
 }
 
 async function printCurrent() {
+  stopAll();
   const { data } = parseFrontMatter(editor.value);
   if (window.gmsDesktop) {
     const result = await window.gmsDesktop.exportPdf(`${slugify(data.title)}.pdf`);
@@ -1114,7 +1108,13 @@ async function inlineInterFontFace() {
 }
 
 async function buildWebExportDocument(title) {
+  stopAll();
   const interFontFace = await inlineInterFontFace();
+  // The export ships no JavaScript: play buttons and tuner strings would be
+  // dead, so the `export-static` class hides them (CSS) and the tuner falls
+  // back to its printable table. Highlight state is stripped as well.
+  const exported = preview.cloneNode(true);
+  exported.querySelectorAll(".playing, .active").forEach(el => el.classList.remove("playing", "active"));
   const html = `<!doctype html>
 <html lang="fr">
 <head>
@@ -1125,7 +1125,7 @@ async function buildWebExportDocument(title) {
 <style>${NOTATION_FONT_FACES}${styleCssText}${interFontFace}</style>
 </head>
 <body style="background:#0b012e; margin:0; padding:1.5rem 0.75rem;">
-<article class="course-page web-mode" style="margin:0 auto;">${preview.innerHTML}</article>
+<article class="course-page web-mode export-static" style="margin:0 auto;">${exported.innerHTML}</article>
 </body>
 </html>
 `;
@@ -1133,6 +1133,7 @@ async function buildWebExportDocument(title) {
 }
 
 printButton.addEventListener("click", async () => {
+  stopAll();
   const { data } = parseFrontMatter(editor.value);
   if (webMode) {
     const html = await buildWebExportDocument(data.title);

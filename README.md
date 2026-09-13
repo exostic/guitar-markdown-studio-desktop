@@ -32,6 +32,9 @@ tempo: 70 BPM
 time: 3/4
 capo: 0
 tuning: Standard
+key: G
+transpose: 0
+sounding: false
 logo: https://raw.githubusercontent.com/<user>/<repo>/main/assets/logo.png
 logo-position: left
 qr: false
@@ -42,6 +45,11 @@ qr: false
 - `logo` : remplace le logo par défaut de l'en-tête par une image externe (URL). Sans ce champ, aucun logo ne s'affiche.
 - `logo-position` : `left` pour aligner le logo à gauche, sinon centré par défaut.
 - `qr` : mettre `qr: false` pour masquer le QR code d'en-tête (par défaut affiché en mode Livre/Poster, absent en mode Web).
+- `key` : tonalité du morceau (`G`, `Em`, `F# minor`, `Sol majeur`). Sert à épeler correctement les accords transposés (bémols en Fa, dièses en Sol…).
+- `transpose` : `+2`, `-3`… décale tous les **noms d'accords** des blocs `chords`, `grid`, `song` et les annotations des tablatures. Les diagrammes de gamme, tableaux de tonalité et cercle des quintes ne sont jamais réécrits.
+- `capo` + `sounding: true` : affiche entre parenthèses l'accord réellement entendu (« Am (Cm) » avec un capo en 3) sur les diagrammes d'accords et dans les grilles.
+- `tuning` : `Standard`, `Drop D`, `DADGAD`, `Open G`, `Open D`, `Eb standard` ou une liste `D A D G B e`. Utilisé par les diagrammes de gamme, l'accordeur et la lecture audio.
+- `tempo` : cliquer sur la pastille lance un métronome (mode Web).
 
 ## Tablatures
 
@@ -101,6 +109,93 @@ B: 1|3|[5]|8|10
 - `frets: min-max` : plage de frettes affichée (déduite automatiquement si absente).
 - Une ligne par corde (`e`, `B`, `G`, `D`, `A`, `E`), notes séparées par `|`.
 - `12` : frette simple. `12,A` : frette avec une étiquette (ex. le nom de la note). `[12]` ou `[12,A]` : frette surlignée.
+
+### Gammes nommées et arpèges
+
+Plutôt que de saisir chaque frette, on peut nommer la gamme : les notes sont calculées, la fondamentale est surlignée.
+
+````markdown
+```scale
+scale: A minor pentatonic
+position: 1
+labels: notes
+```
+````
+
+````markdown
+```scale
+arpeggio: Am7
+frets: 3-8
+```
+````
+
+- `scale: <note> <nom>` : noms acceptés (anglais ou français) : `major/majeure`, `minor/mineure`, `minor pentatonic/pentatonique mineure`, `major pentatonic`, `blues`, `major blues`, `harmonic minor`, `melodic minor`, `dorian/dorien`, `phrygian`, `lydian`, `mixolydian`, `locrian`, `chromatic`, `whole tone`.
+- `arpeggio: <accord>` : notes de l'accord sur le manche, colorées par degré (fondamentale, tierce, quinte, septième). Exclusif avec `scale:`.
+- `position: 1…` : fenêtre de 5 cases qui débute sur la n-ième note de la gamme trouvée sur la corde grave (la position 1 démarre sur la fondamentale la plus basse). `frets:` a priorité si les deux sont présents.
+- `labels: notes | degrees | none` : étiquette dans les pastilles (par défaut `notes` pour une gamme, `degrees` pour un arpège).
+- `tuning:` : accordage propre au bloc, sinon celui du front matter.
+- Les lignes de cordes explicites (`e: [8,bend]`) restent possibles et remplacent la note générée à la même case.
+- Une légende sous le manche rappelle la gamme, la position et ses notes.
+
+## Théorie
+
+### Tonalité (`key`)
+
+````markdown
+```key G
+```
+````
+
+````markdown
+```key
+key: F# minor
+sevenths: true
+```
+````
+
+Tableau des accords diatoniques (degré, chiffre romain, accord, notes, fonction), relative, armure, et pour les tonalités mineures la dominante du mineur harmonique. `sevenths: true` ajoute la colonne des accords de septième.
+
+### Grille en chiffres romains
+
+````markdown
+```grid
+key: G
+||: I | V | vi | IV :|| x2
+| ii7 | V7 | I | I |
+```
+````
+
+Avec une ligne `key:`, les cellules en chiffres romains (`I ii iii IV V vi vii°`, `bVII`, `V7`, `IVmaj7`…) affichent l'accord correspondant avec le chiffre en petit dessous. Accords en clair et chiffres peuvent se mélanger. `/` conserve son sens de mesure coupée en deux.
+
+### Cercle des quintes (`circle`)
+
+````markdown
+```circle D
+```
+````
+
+Roue des tonalités majeures (extérieur) et de leurs relatives mineures (intérieur). La tonalité indiquée est mise en couleur avec ses voisines (sous-dominante, dominante) et leurs relatives. Sans argument, le cercle est affiché neutre.
+
+### Accordeur (`tuner`)
+
+````markdown
+```tuner
+tuning: DADGAD
+```
+````
+
+En mode Web, six boutons jouent la note de chaque corde à vide. En mode Livre/Poster (et dans l'export HTML), un tableau corde / note / fréquence. Sans ligne `tuning:`, l'accordage du front matter est utilisé.
+
+## Lecture audio (mode Web)
+
+En mode Web, un bouton **▶ Écouter** apparaît au-dessus des blocs `tab`, `partition`, `chords`, `grid` et `rhythm` :
+
+- tablature / partition : chaque note est jouée par une corde pincée synthétisée (Karplus-Strong), au tempo du front matter, la mesure en cours est surlignée ;
+- accords : chaque diagramme est gratté tour à tour (un clic sur un diagramme le gratte seul) ;
+- grille : un accord par mesure (reprises et `xN` respectés, chiffres romains résolus dans la tonalité) ;
+- rythmique : la frappe en boucle avec le métronome, la frappe en cours est surlignée.
+
+Le tempo vient de `tempo` (BPM = noires, 80 par défaut), la mesure de `time` (une mesure à 6/8 compte 3 noires), l'accordage de `tuning`, et `capo` décale la hauteur. Rien de tout cela n'apparaît à l'impression ni dans l'export HTML, qui ne contient pas de JavaScript.
 
 ## Autres blocs
 
@@ -200,5 +295,7 @@ npm test
 ```
 
 ## Limites de cette première version
+
+La partition (bloc `partition`) suppose toujours l'accordage standard pour placer les notes sur la portée, même si `tuning` est renseigné.
 
 La durée musicale est actuellement déduite du nombre d'événements présents dans une mesure. La position horizontale de l'ASCII sert à regrouper les notes simultanées, mais ne représente pas encore une quantification rythmique exacte. Le prochain jalon consiste à ajouter une ligne de comptage ou une syntaxe explicite de durée.

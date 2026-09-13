@@ -16,3 +16,15 @@ test("parse une grille multi-lignes où seule la première ligne porte les barre
 test("rejette une grille vide", () => {
   assert.throws(() => parseChordGrid("   "), /aucune ligne trouvée/);
 });
+
+test("extrait la tonalité d'une grille en chiffres romains", () => {
+  const grid = parseChordGrid("key: G\n| I | V | vi | IV |");
+  assert.equal(grid.key, "G");
+  assert.deepEqual(grid.rows, [{ cells: ["I", "V", "vi", "IV"], repeat: false, repeatCount: null }]);
+  assert.equal(parseChordGrid("| Em | C |").key, null);
+  assert.equal(parseChordGrid("Tonalité: Mi mineur\n| i | VI |").key, "Em");
+});
+
+test("rejette une tonalité inconnue", () => {
+  assert.throws(() => parseChordGrid("key: H\n| I |"), /Tonalité inconnue/);
+});

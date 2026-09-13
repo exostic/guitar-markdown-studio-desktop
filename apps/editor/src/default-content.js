@@ -6,6 +6,7 @@ difficulty: Débutant
 tempo: 76 BPM
 time: 4/4
 capo: 0
+key: G
 tuning: Standard
 ---
 
@@ -125,6 +126,23 @@ Le bloc \`columns\` ... \`column\` ... \`endcolumns\` met en page n'importe quel
 \`\`\`endcolumns
 \`\`\`
 
+## Théorie
+
+Le bloc \`key\` dresse la table des accords de la tonalité, la grille accepte les chiffres romains quand elle connaît la tonalité, et \`scale:\` dessine une gamme nommée sans saisir chaque case.
+
+\`\`\`key G
+\`\`\`
+
+\`\`\`grid
+key: G
+| I | V | vi | IV |
+\`\`\`
+
+\`\`\`scale
+scale: G majeure
+position: 1
+\`\`\`
+
 ## Paroles
 
 Une fois les accords en place, essaie de les jouer en rythme sous ce petit couplet (paroles originales, écrites pour cet exercice). Une ligne de \`---\` seule dans le bloc démarre une nouvelle colonne (tu peux en ajouter autant que tu veux) :
@@ -144,6 +162,11 @@ On [D]apprend les accords, on [Em]trace le chemin.
 
 [Em]Sur la route on chante une [C]dernière fois,
 Le [G]voyage s'achève, mais la musique [D]reste en [Em]nous.
+\`\`\`
+
+## Accordeur
+
+\`\`\`tuner
 \`\`\`
 
 ## Exercice

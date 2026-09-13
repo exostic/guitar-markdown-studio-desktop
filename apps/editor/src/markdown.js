@@ -1,10 +1,32 @@
 import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
 import qrcode from "qrcode-generator";
-import { parseAsciiTab, parseChordBlock, parseRhythmPattern, parseChordGrid, parseScale } from "@gms/guitar-markdown";
+import {
+  diatonicChords,
+  isRomanNumeral,
+  keySpellingForPc,
+  noteName,
+  parseAsciiTab,
+  parseChordBlock,
+  parseChordGrid,
+  parseKey,
+  parseRhythmPattern,
+  parseScale,
+  parseTuner,
+  parseTuning,
+  romanToChord,
+  transposeChord,
+} from "@gms/guitar-markdown";
+import { renderCircleOfFifthsSvg, renderKeyChartHtml, renderTunerHtml } from "@gms/renderer-theory";
 
 let blockCounter = 0;
 let currentTimeSignature = "4/4";
+let currentTuning = parseTuning("");
+// Document-level transposition (front matter `transpose`, `capo`, `sounding`,
+// `key`). Only performance labels are rewritten (chord names in chords, grid,
+// song and tab annotations) — theory blocks (scale, key, circle) are explicit
+// and never rewritten.
+let currentTranspose = { semitones: 0, prefer: "auto", capo: 0, sounding: false };
 const pendingRenders = [];
 
 const META_LABELS = {
@@ -13,6 +35,8 @@ const META_LABELS = {
   time: "Mesure",
   capo: "Capo",
   tuning: "Accordage",
+  key: "Tonalité",
+  transpose: "Transposition",
 };
 
 function escapeHtml(value) {
@@ -55,15 +79,79 @@ function mergeChordAndLyricLine(chordLine, lyricLine) {
   );
 }
 
-function renderGridCell(cell) {
+function displayChord(name) {
+  if (!name || !currentTranspose.semitones) return name;
+  return transposeChord(name, currentTranspose.semitones, currentTranspose.prefer);
+}
+
+// "(Cm)" after a chord when the document declares a capo and asks to show
+// the sounding (concert) chord next to the played shape.
+function soundingChord(displayedName) {
+  const { capo, sounding, prefer } = currentTranspose;
+  if (!capo || !sounding || !displayedName) return null;
+  const result = transposeChord(displayedName, capo, prefer === "auto" ? "auto" : prefer);
+  return result === displayedName ? null : result;
+}
+
+function soundingHtml(displayedName) {
+  const result = soundingChord(displayedName);
+  return result ? `<span class="grid-sounding">(${escapeHtml(result)})</span>` : "";
+}
+
+function renderGridChord(part, key) {
+  const text = part.trim();
+  if (key && isRomanNumeral(text)) {
+    const chord = romanToChord(text, key);
+    if (chord) {
+      return `<span class="grid-chord">${formatChordLabel(chord)}${soundingHtml(chord)}</span><span class="grid-numeral">${escapeHtml(text)}</span>`;
+    }
+  }
+  const shown = displayChord(text);
+  return `${formatChordLabel(shown)}${soundingHtml(shown)}`;
+}
+
+function renderGridCell(cell, key, position) {
   const splitMatch = cell.match(/^(.+)\/(.+)$/);
-  if (!splitMatch) return `<div class="grid-cell">${formatChordLabel(cell)}</div>`;
+  if (!splitMatch) return `<div class="grid-cell" data-cell="${position}">${renderGridChord(cell, key)}</div>`;
   const [, first, second] = splitMatch;
-  return `<div class="grid-cell grid-cell-split">
+  return `<div class="grid-cell grid-cell-split" data-cell="${position}">
     <svg class="split-divider" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
-    <span class="split-part split-first">${formatChordLabel(first.trim())}</span>
-    <span class="split-part split-second">${formatChordLabel(second.trim())}</span>
+    <span class="split-part split-first">${renderGridChord(first, key)}</span>
+    <span class="split-part split-second">${renderGridChord(second, key)}</span>
   </div>`;
+}
+
+function blockError(title, message, source) {
+  return `<div class="block-error"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(message)}</p>${source ? `<pre>${escapeHtml(source)}</pre>` : ""}</div>`;
+}
+
+function playButtonHtml(type, id) {
+  return `<div class="block-toolbar block-web"><button type="button" class="play-button" data-play="${type}" data-target="${id}" title="Écouter (mode Web)">▶ Écouter</button></div>`;
+}
+
+function scaleCaptionHtml(meta) {
+  if (!meta) return "";
+  const head = meta.kind === "scale" ? `${meta.root} ${meta.labelFr}` : `Arpège ${meta.name}`;
+  const position = meta.position ? ` · position ${meta.position}` : "";
+  const range = `cases ${meta.fretRange[0]}–${meta.fretRange[1]}`;
+  return `<figcaption class="scale-caption"><strong>${escapeHtml(head)}</strong>${escapeHtml(position)} (${range}) · ${meta.notes.map(escapeHtml).join(" ")}</figcaption>`;
+}
+
+// Body lines of the key / circle fences: "key: G", "sevenths: true". The
+// fence argument (```key G) is the shorthand; body lines win over it.
+function parseKeyFenceBody(fenceArg, body) {
+  let keyText = fenceArg.trim() || null;
+  let sevenths = false;
+  for (const raw of body.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const match = line.match(/^(key|tonalit[eé]|sevenths|septi[eè]mes)\s*:\s*(.+)$/i);
+    if (!match) throw new Error(`Ligne invalide : « ${line} »`);
+    const field = match[1].toLowerCase();
+    if (field.startsWith("key") || field.startsWith("tonalit")) keyText = match[2].trim();
+    else sevenths = /^(true|oui|yes|1)$/i.test(match[2].trim());
+  }
+  return { keyText, sevenths };
 }
 
 export function parseFrontMatter(source) {
@@ -81,7 +169,7 @@ export function parseFrontMatter(source) {
 }
 
 function renderHeader(data) {
-  const { title, artist, logo, qr, "logo-position": logoPosition, ...rest } = data;
+  const { title, artist, logo, qr, "logo-position": logoPosition, sounding, ...rest } = data;
   const logoPositionClass = logoPosition === "left" ? " doc-header-top-left" : "";
   const pills = Object.entries(rest)
     .filter(([, value]) => value)
@@ -110,27 +198,22 @@ const defaultFence = md.renderer.rules.fence.bind(md.renderer.rules);
 
 md.renderer.rules.fence = (tokens, index, options, env, self) => {
   const token = tokens[index];
-  const language = token.info.trim().toLowerCase();
+  const info = token.info.trim();
+  const language = info.toLowerCase();
+  const [fenceWordRaw, ...fenceRest] = info.split(/\s+/);
+  const fenceWord = (fenceWordRaw ?? "").toLowerCase();
+  const fenceArg = fenceRest.join(" ");
 
-  if (language === "tab") {
-    const id = `gms-tab-${blockCounter++}`;
+  if (language === "tab" || language === "partition") {
+    const id = `gms-${language}-${blockCounter++}`;
     try {
-      const ast = parseAsciiTab(token.content, { timeSignature: currentTimeSignature });
-      pendingRenders.push({ type: "tab", id, ast });
-      return `<figure class="guitar-block tab-block"><div id="${id}" class="vex-tab-host"></div><details><summary>Source ASCII</summary><pre><code>${escapeHtml(token.content)}</code></pre></details></figure>`;
+      const ast = parseAsciiTab(token.content, { timeSignature: currentTimeSignature, tuning: currentTuning.notes });
+      for (const measure of ast.measures) measure.chord = displayChord(measure.chord);
+      pendingRenders.push({ type: language, id, ast });
+      const hostClass = language === "tab" ? "vex-tab-host" : "vex-score-host";
+      return `<figure class="guitar-block ${language}-block">${playButtonHtml(language, id)}<div id="${id}" class="${hostClass}"></div><details><summary>Source ASCII</summary><pre><code>${escapeHtml(token.content)}</code></pre></details></figure>`;
     } catch (error) {
-      return `<div class="block-error"><strong>Tablature invalide</strong><p>${escapeHtml(error.message)}</p><pre>${escapeHtml(token.content)}</pre></div>`;
-    }
-  }
-
-  if (language === "partition") {
-    const id = `gms-partition-${blockCounter++}`;
-    try {
-      const ast = parseAsciiTab(token.content, { timeSignature: currentTimeSignature });
-      pendingRenders.push({ type: "partition", id, ast });
-      return `<figure class="guitar-block partition-block"><div id="${id}" class="vex-score-host"></div><details><summary>Source ASCII</summary><pre><code>${escapeHtml(token.content)}</code></pre></details></figure>`;
-    } catch (error) {
-      return `<div class="block-error"><strong>Partition invalide</strong><p>${escapeHtml(error.message)}</p><pre>${escapeHtml(token.content)}</pre></div>`;
+      return blockError(language === "tab" ? "Tablature invalide" : "Partition invalide", error.message, token.content);
     }
   }
 
@@ -138,30 +221,70 @@ md.renderer.rules.fence = (tokens, index, options, env, self) => {
     const id = `gms-chords-${blockCounter++}`;
     try {
       const ast = parseChordBlock(token.content);
+      for (const chord of ast) {
+        const shown = displayChord(chord.name);
+        const sounding = soundingChord(shown);
+        chord.name = sounding ? `${shown} (${sounding})` : shown;
+      }
       pendingRenders.push({ type: "chords", id, ast });
-      return `<figure class="guitar-block chord-block"><div id="${id}" class="svguitar-host"></div></figure>`;
+      return `<figure class="guitar-block chord-block">${playButtonHtml("chords", id)}<div id="${id}" class="svguitar-host"></div></figure>`;
     } catch (error) {
-      return `<div class="block-error"><strong>Accords invalides</strong><p>${escapeHtml(error.message)}</p></div>`;
+      return blockError("Accords invalides", error.message);
     }
   }
 
   if (language === "scale") {
     const id = `gms-scale-${blockCounter++}`;
     try {
-      const ast = parseScale(token.content);
+      const ast = parseScale(token.content, { tuning: currentTuning });
       pendingRenders.push({ type: "scale", id, ast });
-      return `<figure class="guitar-block scale-block"><div id="${id}" class="fretboard-host"></div></figure>`;
+      return `<figure class="guitar-block scale-block"><div id="${id}" class="fretboard-host"></div>${scaleCaptionHtml(ast.meta)}</figure>`;
     } catch (error) {
-      return `<div class="block-error"><strong>Diagramme de gamme invalide</strong><p>${escapeHtml(error.message)}</p></div>`;
+      return blockError("Diagramme de gamme invalide", error.message);
+    }
+  }
+
+  if (fenceWord === "key") {
+    try {
+      const { keyText, sevenths } = parseKeyFenceBody(fenceArg, token.content);
+      if (!keyText) throw new Error("Indiquez une tonalité, par exemple ```key G ou une ligne « key: Em ».");
+      const chart = diatonicChords(keyText, { sevenths });
+      if (!chart) throw new Error(`Tonalité inconnue « ${keyText} ». Exemples : G, Em, F# minor, Sol majeur.`);
+      return renderKeyChartHtml(chart);
+    } catch (error) {
+      return blockError("Tonalité invalide", error.message);
+    }
+  }
+
+  if (fenceWord === "circle") {
+    try {
+      const { keyText } = parseKeyFenceBody(fenceArg, token.content);
+      if (keyText && !parseKey(keyText)) throw new Error(`Tonalité inconnue « ${keyText} ».`);
+      return renderCircleOfFifthsSvg(keyText ?? "");
+    } catch (error) {
+      return blockError("Cercle des quintes invalide", error.message);
+    }
+  }
+
+  if (language === "tuner") {
+    try {
+      const ast = parseTuner(token.content, { defaultTuning: currentTuning });
+      return renderTunerHtml(ast);
+    } catch (error) {
+      return blockError("Accordeur invalide", error.message);
     }
   }
 
   if (language === "grid") {
+    const id = `gms-grid-${blockCounter++}`;
     try {
       const grid = parseChordGrid(token.content);
+      const key = grid.key ? displayChord(grid.key) : null;
+      grid.displayKey = key;
+      pendingRenders.push({ type: "grid", id, ast: grid });
       const rowsHtml = grid.rows
         .map((row, index) => {
-          const cellsHtml = row.cells.map(renderGridCell).join("");
+          const cellsHtml = row.cells.map((cell, cellIndex) => renderGridCell(cell, key, `${index}-${cellIndex}`)).join("");
           const cls = `grid-row${row.repeat ? " repeat" : ""}`;
           const rowLine = index + 1;
           const rowHtml = `<div class="${cls}" style="--cols:${row.cells.length}; grid-row:${rowLine};">${cellsHtml}</div>`;
@@ -171,22 +294,25 @@ md.renderer.rules.fence = (tokens, index, options, env, self) => {
           return rowHtml + countHtml;
         })
         .join("");
-      return `<div class="chord-grid">${rowsHtml}</div>`;
+      return `<div class="chord-grid-wrapper">${playButtonHtml("grid", id)}<div class="chord-grid" id="${id}">${rowsHtml}</div></div>`;
     } catch (error) {
-      return `<div class="block-error"><strong>Grille invalide</strong><p>${escapeHtml(error.message)}</p></div>`;
+      return blockError("Grille invalide", error.message);
     }
   }
 
   if (language === "rhythm") {
+    const id = `gms-rhythm-${blockCounter++}`;
     try {
       const pattern = parseRhythmPattern(token.content);
+      pendingRenders.push({ type: "rhythm", id, ast: pattern });
       const groupsHtml = pattern.groups
         .map((group, index) => {
           const strokesHtml = group
             .map((stroke, strokeIndex) => {
+              const position = `data-stroke="${index}-${strokeIndex}"`;
               const strokeHtml = stroke.rest
-                ? `<span class="stroke stroke-rest"></span>`
-                : `<span class="stroke stroke-${stroke.direction}${stroke.ghost ? " ghost" : ""}">${stroke.direction === "down" ? "B" : "H"}</span>`;
+                ? `<span class="stroke stroke-rest" ${position}></span>`
+                : `<span class="stroke stroke-${stroke.direction}${stroke.ghost ? " ghost" : ""}" ${position}>${stroke.direction === "down" ? "B" : "H"}</span>`;
               if (strokeIndex !== 0) return strokeHtml;
               return `<span class="rhythm-first">${strokeHtml}<span class="beat-number">${index + 1}</span></span>`;
             })
@@ -194,9 +320,9 @@ md.renderer.rules.fence = (tokens, index, options, env, self) => {
           return `<div class="rhythm-group"><div class="rhythm-strokes">${strokesHtml}</div></div>`;
         })
         .join("");
-      return `<div class="rhythm-block">${groupsHtml}</div>`;
+      return `<div class="rhythm-wrapper">${playButtonHtml("rhythm", id)}<div class="rhythm-block" id="${id}">${groupsHtml}</div></div>`;
     } catch (error) {
-      return `<div class="block-error"><strong>Rythmique invalide</strong><p>${escapeHtml(error.message)}</p></div>`;
+      return blockError("Rythmique invalide", error.message);
     }
   }
   if (language === "song") {
@@ -224,7 +350,7 @@ md.renderer.rules.fence = (tokens, index, options, env, self) => {
               .map(line => {
                 const html = escapeHtml(line).replace(
                   /\[([^\]]+)\]/g,
-                  (_, chord) => `<span class="inline-chord" data-chord="${chord}"></span>`,
+                  (_, chord) => `<span class="inline-chord" data-chord="${escapeHtml(displayChord(chord))}"></span>`,
                 );
                 return `<div class="song-line">${html}</div>`;
               })
@@ -339,7 +465,22 @@ export function renderMarkdown(source) {
   pendingRenders.length = 0;
   const { data, content } = parseFrontMatter(source);
   currentTimeSignature = data.time ?? "4/4";
-  const headerHtml = renderHeader(data);
+  currentTuning = parseTuning(data.tuning ?? "") ?? parseTuning("");
+  const transposeMatch = /^([+-]?\d+)$/.exec((data.transpose ?? "").trim());
+  const semitones = transposeMatch ? Number(transposeMatch[1]) : 0;
+  const documentKey = data.key ? parseKey(data.key) : null;
+  currentTranspose = {
+    semitones,
+    prefer: documentKey ? keySpellingForPc(documentKey.tonicPc + semitones, documentKey.mode) : "auto",
+    capo: Number(/(\d+)/.exec(data.capo ?? "")?.[1] ?? 0),
+    sounding: /^(true|oui|yes|1)$/i.test((data.sounding ?? "").trim()),
+  };
+  const headerData = { ...data };
+  if (documentKey && semitones) {
+    const tonic = noteName(documentKey.tonicPc + semitones, currentTranspose.prefer);
+    headerData.key = documentKey.mode === "minor" ? `${tonic}m` : tonic;
+  }
+  const headerHtml = renderHeader(headerData);
   const bodyHtml = md.render(content);
   return {
     html: DOMPurify.sanitize(headerHtml + bodyHtml, {
