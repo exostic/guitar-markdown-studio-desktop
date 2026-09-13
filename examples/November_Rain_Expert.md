@@ -9,6 +9,7 @@ key: F
 tuning: Standard
 transpose: 0
 sounding: false
+sound: distortion
 logo: https://raw.githubusercontent.com/exostic/guitar-markdown-studio-desktop/main/assets/logo.png
 logo-position: left
 qr: false
