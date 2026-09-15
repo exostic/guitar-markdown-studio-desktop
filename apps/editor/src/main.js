@@ -1409,11 +1409,38 @@ function buildHeaderQrUrl() {
   return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 }
 
+// The share link, as a short alias when TinyURL answers, the full link
+// otherwise. Resolves to { url, short }.
+async function shareLink() {
+  const full = buildShareUrl("web");
+  try {
+    return { url: await shortenUrl(full), short: true };
+  } catch (error) {
+    console.warn("[share] lien court impossible, lien complet utilisé", error);
+    return { url: full, short: false };
+  }
+}
+
 shareButton.addEventListener("click", async () => {
   // Always the Web view, regardless of what mode is currently active —
   // that's the format meant for sharing with a student.
-  const copied = await copyToClipboard(buildShareUrl("web"));
-  status.textContent = copied ? "Lien copié" : "Erreur de copie";
+  status.textContent = "Préparation du lien…";
+  const pending = shareLink();
+  // Safari only writes to the clipboard within the click: a ClipboardItem
+  // fed by a promise keeps the gesture while the alias is being made.
+  if (navigator.clipboard?.write && typeof ClipboardItem === "function" && ClipboardItem.supports?.("text/plain") !== false) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "text/plain": pending.then(link => new Blob([link.url], { type: "text/plain" })) })]);
+      const { short } = await pending;
+      status.textContent = short ? "Lien court copié" : "Lien copié (lien court indisponible)";
+      return;
+    } catch (error) {
+      console.warn("[share] ClipboardItem impossible, copie classique", error);
+    }
+  }
+  const { url, short } = await pending;
+  const copied = await copyToClipboard(url);
+  status.textContent = copied ? (short ? "Lien court copié" : "Lien copié (lien court indisponible)") : "Erreur de copie";
 });
 
 // "Envoyer par e-mail…": the mail client opens (new tab on the web) on a
@@ -1449,18 +1476,12 @@ function emailMessage(link) {
 }
 
 async function shareByEmail() {
-  const shareUrl = buildShareUrl("web");
   status.textContent = "Préparation du lien…";
-  let link = shareUrl;
-  try {
-    link = await shortenUrl(shareUrl);
-  } catch (error) {
-    console.warn("[share] lien court impossible, lien complet utilisé", error);
-  }
+  const { url: link, short } = await shareLink();
   const message = emailMessage(link);
   const mailtoFor = body => `mailto:?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(body)}`;
   let mailto = mailtoFor(message.withLink);
-  let note = link === shareUrl ? "Message prêt dans ta messagerie, avec le lien complet du cours" : "Message prêt dans ta messagerie, avec le lien du cours";
+  let note = short ? "Message prêt dans ta messagerie, avec le lien du cours" : "Message prêt dans ta messagerie, avec le lien complet du cours";
   if (!mailtoFits(mailto)) {
     const copied = await copyToClipboard(editor.value);
     if (!copied) throw new Error("Lien court indisponible, cours trop long pour un e-mail et copie impossible : partage-le par Drive.");
