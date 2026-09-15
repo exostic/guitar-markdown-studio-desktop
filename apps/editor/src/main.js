@@ -85,7 +85,6 @@ app.innerHTML = `
           <button type="button" data-drive="open">Ouvrir depuis Drive…</button>
           <button type="button" data-drive="save">Enregistrer sur Drive</button>
           <button type="button" data-drive="save-as">Enregistrer sous… (Drive)</button>
-          <button type="button" data-drive="share">Partager sur Drive avec…</button>
           <button type="button" data-drive="settings">Réglages Google…</button>
           <button type="button" data-drive="sign-out">Se déconnecter</button>
         </div>
@@ -95,6 +94,7 @@ app.innerHTML = `
         <div class="dropdown-menu" id="share-menu" role="menu" hidden>
           <button id="share-btn" type="button">Copier un lien de partage</button>
           <button id="view-only-btn" type="button">Aperçu client</button>
+          <button type="button" data-drive="share">Partager sur Drive avec…</button>
         </div>
       </span>
       <button id="print" class="primary">Imprimer / PDF</button>
@@ -352,7 +352,7 @@ async function driveShare() {
   status.textContent = `Partagé avec ${granted.emailAddress ?? address} (${canEdit ? "modification" : "lecture"})`;
 }
 
-driveMenu.addEventListener("click", async event => {
+async function onDriveMenu(event) {
   const action = event.target.closest("[data-drive]")?.dataset.drive;
   if (!action) return;
   try {
@@ -370,7 +370,9 @@ driveMenu.addEventListener("click", async event => {
     status.textContent = error.message;
     console.error("[drive]", error);
   }
-});
+}
+driveMenu.addEventListener("click", onDriveMenu);
+document.querySelector("#share-menu").addEventListener("click", onDriveMenu);
 
 // "+" in the Markdown pane title opens the menu of components to insert.
 const insertOpen = document.querySelector("#insert-open");
