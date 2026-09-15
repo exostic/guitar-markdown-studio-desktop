@@ -1416,39 +1416,69 @@ shareButton.addEventListener("click", async () => {
 });
 
 // "Envoyer par e-mail…": the mail client opens (new tab on the web) on a
-// friendly message that carries the course itself, the Markdown pasted
-// after the text, so nothing has to be attached: the person copies it
-// into the app or saves it as a .md file.
+// friendly message. The course itself goes into the body when the link
+// stays short enough for the mail clients: Gmail receives a mailto as a
+// URL and answers 400 beyond about 8 KB, the mailto itself being
+// percent-encoded once more on the way. Longer courses fall back to the
+// share link, and longer still to the clipboard, the message then asks
+// to paste.
+const MAILTO_LIMIT = 7600;
+const EMAIL_RULE = "――――――――――――――――――――――――――――――";
+
+function mailtoFits(mailto) {
+  return encodeURIComponent(mailto).length < MAILTO_LIMIT;
+}
+
 function emailMessage() {
   const { data } = parseFrontMatter(editor.value);
   const title = data.title || "Cours de guitare";
   const name = suggestedDriveName();
   const subject = `🎸 Cours de guitare : ${title}`;
-  const body = [
-    "Bonjour,",
-    "",
-    `Je te partage « ${title} », un cours de guitare préparé avec Guitar Markdown Studio.`,
-    "",
-    "Pour le lire, l'écouter et l'imprimer : ouvre https://gms.exostic.com, efface l'exemple (la corbeille du panneau Markdown) et colle le texte qui suit le trait ci-dessous. Tu y retrouveras les accords, les grilles, les rythmiques, les tablatures et les partitions, et tu pourras écouter chaque morceau note par note.",
+  const intro = ["Bonjour,", "", `Je te partage « ${title} », un cours de guitare préparé avec Guitar Markdown Studio.`, ""];
+  const features = "Tu y retrouveras les accords, les grilles, les rythmiques, les tablatures et les partitions, et tu pourras écouter chaque morceau note par note.";
+  const outro = ["", "Bonne musique ! 🎸"];
+  const inline = [
+    ...intro,
+    `Pour le lire, l'écouter et l'imprimer : ouvre https://gms.exostic.com, efface l'exemple (la corbeille du panneau Markdown) et colle le texte qui suit le trait ci-dessous. ${features}`,
     "",
     `Tu peux aussi l'enregistrer dans un fichier ${name} et l'ouvrir avec Fichier ▸ Ouvrir….`,
+    ...outro,
     "",
-    "Bonne musique ! 🎸",
-    "",
-    "――――――――――――――――――――――――――――――",
+    EMAIL_RULE,
     "",
     editor.value.trim(),
     "",
-  ].join("\n");
-  return { title, name, subject, body };
+  ];
+  const link = [...intro, `Ouvre-le ici, il s'affiche directement : ${buildShareUrl("web")}`, "", features, ...outro, ""];
+  const paste = [
+    ...intro,
+    `Pour le lire, l'écouter et l'imprimer : ouvre https://gms.exostic.com, efface l'exemple (la corbeille du panneau Markdown) et colle le texte qui suit le trait ci-dessous. ${features}`,
+    ...outro,
+    "",
+    EMAIL_RULE,
+    "",
+  ];
+  return { subject, inline: inline.join("\n"), link: link.join("\n"), paste: paste.join("\n") };
 }
 
 async function shareByEmail() {
   const message = emailMessage();
-  const mailto = `mailto:?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(message.body)}`;
+  const mailtoFor = body => `mailto:?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(body)}`;
+  let mailto = mailtoFor(message.inline);
+  let note = "Message prêt dans ta messagerie, le cours est dedans";
+  if (!mailtoFits(mailto)) {
+    mailto = mailtoFor(message.link);
+    note = "Message prêt dans ta messagerie, avec le lien du cours";
+  }
+  if (!mailtoFits(mailto)) {
+    const copied = await copyToClipboard(editor.value);
+    if (!copied) throw new Error("Cours trop long pour un e-mail et copie impossible : partage-le par Drive ou par lien.");
+    mailto = mailtoFor(message.paste);
+    note = "Cours copié : colle-le à la fin du message";
+  }
   if (window.gmsDesktop?.shareByEmail) await window.gmsDesktop.shareByEmail({ mailto });
   else window.open(mailto, "_blank", "noopener");
-  status.textContent = "Message prêt dans ta messagerie";
+  status.textContent = note;
 }
 document.querySelector("#email-btn").addEventListener("click", () => shareByEmail().catch(error => { status.textContent = error.message; console.error("[share]", error); }));
 
