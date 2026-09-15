@@ -1415,11 +1415,10 @@ shareButton.addEventListener("click", async () => {
   status.textContent = copied ? "Lien copié" : "Erreur de copie";
 });
 
-// "Envoyer par e-mail…": the .md goes as an attachment with a friendly
-// message. Web: the system share sheet (Web Share API with files) when the
-// browser offers one; otherwise the file is downloaded and the mail client
-// opens on a prefilled message, the person attaches the file. Desktop: the
-// macOS share sheet, or save dialog + mail client elsewhere.
+// "Envoyer par e-mail…": the mail client opens (new tab on the web) on a
+// friendly message that carries the course itself, the Markdown pasted
+// after the text, so nothing has to be attached: the person copies it
+// into the app or saves it as a .md file.
 function emailMessage() {
   const { data } = parseFrontMatter(editor.value);
   const title = data.title || "Cours de guitare";
@@ -1430,49 +1429,26 @@ function emailMessage() {
     "",
     `Je te partage « ${title} », un cours de guitare préparé avec Guitar Markdown Studio.`,
     "",
-    `Le fichier ${name} est en pièce jointe. Pour le lire, l'écouter et l'imprimer :`,
-    "  1. ouvre https://gms.exostic.com ;",
-    `  2. choisis Fichier ▸ Ouvrir… et sélectionne ${name}.`,
+    "Pour le lire, l'écouter et l'imprimer : ouvre https://gms.exostic.com, efface l'exemple (la corbeille du panneau Markdown) et colle le texte qui suit le trait ci-dessous. Tu y retrouveras les accords, les grilles, les rythmiques, les tablatures et les partitions, et tu pourras écouter chaque morceau note par note.",
     "",
-    "Tu y retrouveras les accords, les grilles, les rythmiques, les tablatures et les partitions, et tu pourras écouter chaque morceau note par note.",
+    `Tu peux aussi l'enregistrer dans un fichier ${name} et l'ouvrir avec Fichier ▸ Ouvrir….`,
     "",
     "Bonne musique ! 🎸",
+    "",
+    "――――――――――――――――――――――――――――――",
+    "",
+    editor.value.trim(),
+    "",
   ].join("\n");
-  return { title, name, subject, body, content: editor.value };
-}
-
-function downloadText(name, content) {
-  const url = URL.createObjectURL(new Blob([content], { type: "text/markdown;charset=utf-8" }));
-  const link = Object.assign(document.createElement("a"), { href: url, download: name });
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return { title, name, subject, body };
 }
 
 async function shareByEmail() {
   const message = emailMessage();
   const mailto = `mailto:?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(message.body)}`;
-  if (window.gmsDesktop?.shareByEmail) {
-    const result = await window.gmsDesktop.shareByEmail({ ...message, mailto });
-    if (!result) return;
-    status.textContent = result.mode === "sheet" ? "Choisis Mail dans le menu de partage" : `${message.name} enregistré : joins-le à l'e-mail`;
-    return;
-  }
-  const file = new File([message.content], message.name, { type: "text/markdown" });
-  if (navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({ title: message.subject, text: message.body, files: [file] });
-      status.textContent = "Message prêt à envoyer";
-      return;
-    } catch (error) {
-      if (error.name === "AbortError") return;
-      console.warn("[share]", error);
-    }
-  }
-  downloadText(message.name, message.content);
-  window.open(mailto, "_blank", "noopener");
-  status.textContent = `${message.name} téléchargé : joins-le à l'e-mail`;
+  if (window.gmsDesktop?.shareByEmail) await window.gmsDesktop.shareByEmail({ mailto });
+  else window.open(mailto, "_blank", "noopener");
+  status.textContent = "Message prêt dans ta messagerie";
 }
 document.querySelector("#email-btn").addEventListener("click", () => shareByEmail().catch(error => { status.textContent = error.message; console.error("[share]", error); }));
 

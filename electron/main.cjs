@@ -1,5 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, session, shell, ShareMenu } = require('electron');
-const os = require('node:os');
+const { app, BrowserWindow, dialog, ipcMain, session, shell } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -120,26 +119,10 @@ ipcMain.handle('document:export-html', async (_event, html, suggestedFileName) =
   return { filePath: result.filePath };
 });
 
-// Share by e-mail with the .md attached. macOS has a share sheet that
-// carries files and text (Mail, Messages, AirDrop…); elsewhere the file is
-// saved where the user wants and the mail client opens on the message.
-ipcMain.handle('share:email', async (_event, { name, content, body, mailto }) => {
-  if (process.platform === 'darwin' && ShareMenu) {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'gms-share-'));
-    const filePath = path.join(dir, name);
-    await fs.writeFile(filePath, content, 'utf8');
-    new ShareMenu({ filePaths: [filePath], texts: [body] }).popup({ window: mainWindow });
-    return { mode: 'sheet', filePath };
-  }
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: "Enregistrer le cours à joindre à l'e-mail",
-    defaultPath: name,
-    filters: [{ name: 'Markdown', extensions: ['md'] }],
-  });
-  if (result.canceled || !result.filePath) return null;
-  await fs.writeFile(result.filePath, content, 'utf8');
+// Share by e-mail: the message (course included) opens in the mail client.
+ipcMain.handle('share:email', async (_event, { mailto }) => {
   await shell.openExternal(mailto);
-  return { mode: 'mailto', filePath: result.filePath };
+  return { mode: 'mailto' };
 });
 
 ipcMain.handle('google:auth', async (_event, options) => {
