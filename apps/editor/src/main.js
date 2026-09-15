@@ -113,7 +113,7 @@ app.innerHTML = `
     <div class="track-picker drive-settings" id="drive-settings" role="dialog" aria-modal="true" hidden>
       <div class="insert-menu-heading">Google Drive</div>
       <h2 class="track-picker-title">Réglages Google</h2>
-      <p class="drive-help">Tout se passe côté client, avec OAuth seulement : aucune clé ni secret. Dans la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console Google Cloud</a>, activez l'API Drive et créez un identifiant OAuth de type <em>Application Web</em> avec, en origine JavaScript autorisée, l'adresse du site, et en URI de redirection autorisée <code>http://localhost:43110/</code> pour l'application de bureau.</p>
+      <p class="drive-help">Tout se passe côté client, avec OAuth seulement : aucune clé ni secret. L'application ne demande que l'accès aux fichiers qu'elle a créés (portée <code>drive.file</code>), sans validation Google. Dans la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console Google Cloud</a>, activez l'API Drive et créez un identifiant OAuth de type <em>Application Web</em> avec, en origine JavaScript autorisée, l'adresse du site, et en URI de redirection autorisée <code>http://localhost:43110/</code> pour l'application de bureau.</p>
       <label class="drive-field">Identifiant client OAuth (public)<input type="text" id="drive-client-id" placeholder="xxxx.apps.googleusercontent.com" spellcheck="false"></label>
       <div class="track-picker-actions">
         <button type="button" id="drive-settings-cancel">Annuler</button>
@@ -274,7 +274,7 @@ async function chooseDriveFile() {
   const list = document.querySelector("#drive-picker-list");
   list.innerHTML = files.length
     ? files.map(file => `<button type="button" class="track-picker-row drive-file" data-id="${escapeHtml(file.id)}" data-name="${escapeHtml(file.name)}"><span class="track-picker-name">${escapeHtml(file.name)}</span><span class="track-picker-meta">modifié le ${escapeHtml(new Date(file.modifiedTime).toLocaleString("fr-FR"))}</span></button>`).join("")
-    : `<p class="drive-empty">Aucun fichier Markdown sur ce Drive.</p>`;
+    : `<p class="drive-empty">Aucun cours enregistré par l'application sur ce Drive. Pour un fichier créé ailleurs, importez-le (Fichier › Importer…) puis enregistrez-le sur Drive : il apparaîtra ici ensuite.</p>`;
   showModal(drivePicker);
   return new Promise(resolve => {
     const finish = chosen => {

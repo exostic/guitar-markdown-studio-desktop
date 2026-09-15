@@ -10,10 +10,11 @@ const DEFAULT_CLIENT_ID = "1080726648569-q66a774j7fdtk266slf7poar6snphp0r.apps.g
 const TOKEN_KEY = "gms:drive-token";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
-// The full Drive scope: listing and opening the Markdown files already on
-// the Drive and saving back onto them. (drive.file alone only writes files
-// the app created; drive.readonly cannot write at all.)
-const SCOPES = "https://www.googleapis.com/auth/drive";
+// drive.file only: Google does not treat it as sensitive, so there is no
+// "unverified app" warning and no verification. The app sees and writes
+// only the files it created or saved itself; a course written elsewhere is
+// imported once, then saved to Drive, after which it stays visible.
+const SCOPES = "https://www.googleapis.com/auth/drive.file";
 
 function storage(key, value) {
   try {
