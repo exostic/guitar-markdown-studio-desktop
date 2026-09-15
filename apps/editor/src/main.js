@@ -1088,8 +1088,9 @@ function update() {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       ignorePreviewScroll = false;
     }));
+    // The draft is kept in session storage for a reload; no status for it,
+    // "saved" would read as saved to a file.
     sessionStorage.setItem(STORAGE_KEY, editor.value);
-    status.textContent = "Sauvegardé";
   } catch (error) {
     ignorePreviewScroll = false;
     status.textContent = "Erreur";
