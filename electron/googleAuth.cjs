@@ -64,8 +64,10 @@ async function googleAuth({ clientId, scopes }) {
       if (ok) resolve({ accessToken: token.access_token, expiresIn: Number(token.expires_in) || 3600 });
       else reject(new Error(token.error ?? 'Connexion Google annulée.'));
     });
+    // Exactly the scopes asked for: previously granted (broader) scopes must
+    // not be folded back into this token, or Google warns about them again.
     const params = new URLSearchParams({
-      client_id: clientId, redirect_uri: REDIRECT_URI, response_type: 'token', scope: scopes, state, include_granted_scopes: 'true',
+      client_id: clientId, redirect_uri: REDIRECT_URI, response_type: 'token', scope: scopes, state, include_granted_scopes: 'false',
     });
     shell.openExternal(`${AUTH_URL}?${params}`);
   });

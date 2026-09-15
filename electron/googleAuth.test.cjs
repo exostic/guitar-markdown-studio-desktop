@@ -22,6 +22,8 @@ test('le flux de bureau reçoit le jeton renvoyé sur localhost:43110', async ()
     assert.equal(params.get('response_type'), 'token');
     assert.equal(params.get('redirect_uri'), REDIRECT_URI);
     assert.equal(params.get('client_id'), 'public-id');
+    assert.equal(params.get('include_granted_scopes'), 'false');
+    assert.equal(params.get('scope'), 'drive');
     const page = await fetch(REDIRECT_URI);
     assert.match(await page.text(), /location\.hash/);
     await fetch(`${REDIRECT_URI}token?state=${params.get('state')}&access_token=ya29.test&expires_in=3599`);
