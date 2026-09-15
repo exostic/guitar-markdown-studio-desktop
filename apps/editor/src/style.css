@@ -201,6 +201,17 @@ button:focus-visible,
   border-color: #b91c1c;
   color: #fff;
 }
+.pane-icon-neutral:hover {
+  background: var(--secondary);
+  border-color: var(--secondary);
+  color: #fff;
+}
+.preview-pane .pane-title-row {
+  gap: 0.5rem;
+}
+.preview-pane .mode-switch {
+  margin-left: auto;
+}
 /* "+" at the right of the Markdown pane title. */
 .insert-open {
   display: inline-flex;
@@ -374,7 +385,31 @@ button:focus-visible,
   font-weight: 600;
   color: var(--text-dim);
 }
-.drive-field input {
+.email-dialog {
+  width: min(560px, calc(100vw - 2rem));
+}
+.email-dialog textarea {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+  resize: vertical;
+}
+.email-attachment {
+  margin: 0 0 0.8rem;
+  font-size: 0.85rem;
+}
+.email-attachment-hint {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+.drive-field input,
+.drive-field textarea {
   font: inherit;
   font-size: 0.85rem;
   font-weight: 400;

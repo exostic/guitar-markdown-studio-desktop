@@ -14,6 +14,7 @@ import { setSampler } from "./audio/engine.js";
 import { destroyAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPro, onAlphaTabRendered, renderAlphaTabBlock } from "./alphatab.js";
 import { parseStaff } from "./blockOptions.js";
 import { downloadFile, getDriveConfig, listMarkdownFiles, setDriveConfig, shareFile, signOut as driveSignOut, uploadFile } from "./drive.js";
+import { sendGmail } from "./gmail.js";
 import LZString from "lz-string";
 
 const { compressToEncodedURIComponent, decompressFromEncodedURIComponent } = LZString;
@@ -93,7 +94,6 @@ app.innerHTML = `
         <button id="share-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false">Partager ▾</button>
         <div class="dropdown-menu" id="share-menu" role="menu" hidden>
           <button id="share-btn" type="button">Copier un lien de partage</button>
-          <button id="view-only-btn" type="button">Aperçu client</button>
           <button type="button" data-drive="share">Partager sur Drive avec…</button>
           <button id="email-btn" type="button">Envoyer par e-mail…</button>
         </div>
@@ -120,6 +120,20 @@ app.innerHTML = `
       <div class="track-picker-actions">
         <button type="button" id="drive-settings-cancel">Annuler</button>
         <button type="button" id="drive-settings-ok" class="primary">Enregistrer</button>
+      </div>
+    </div>
+    <div class="track-picker drive-settings email-dialog" id="email-dialog" role="dialog" aria-modal="true" hidden>
+      <div class="insert-menu-heading">Partager</div>
+      <h2 class="track-picker-title">Envoyer par e-mail</h2>
+      <label class="drive-field">À<input type="text" id="email-to" placeholder="eleve@exemple.fr, autre@exemple.fr" spellcheck="false" autocomplete="email"></label>
+      <label class="drive-field">Objet<input type="text" id="email-subject"></label>
+      <label class="drive-field">Message<textarea id="email-body" rows="9"></textarea></label>
+      <p class="email-attachment">📎 <span id="email-attachment"></span> <span class="email-attachment-hint">joint au message</span></p>
+      <p class="drive-help">« Envoyer avec Gmail » envoie le message depuis votre compte Google, fichier joint, sans quitter l'application (portée <code>gmail.send</code>). « Autre messagerie » passe par le menu de partage du système ou télécharge le fichier et ouvre votre messagerie sur le message.</p>
+      <div class="track-picker-actions">
+        <button type="button" id="email-cancel">Annuler</button>
+        <button type="button" id="email-other">Autre messagerie</button>
+        <button type="button" id="email-gmail" class="primary">Envoyer avec Gmail</button>
       </div>
     </div>
     <div class="track-picker" id="track-picker" role="dialog" aria-modal="true" aria-labelledby="track-picker-title" hidden>
@@ -178,6 +192,7 @@ app.innerHTML = `
           <button id="mode-landscape" class="mode-option" type="button">Poster</button>
           <button id="mode-web" class="mode-option" type="button">Web</button>
         </div>
+        <span class="pane-title-actions"><button id="view-only-btn" class="pane-icon pane-icon-neutral" type="button" title="Aperçu client (plein écran)" aria-label="Aperçu client (plein écran)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button></span>
       </div>
       <div id="preview-scale-wrapper">
         <article id="preview" class="course-page"></article>
@@ -1450,9 +1465,13 @@ function downloadText(name, content) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-async function shareByEmail() {
-  const message = emailMessage();
-  const mailto = `mailto:?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(message.body)}`;
+// Attachment through the mail client, when Gmail is not wanted: the system
+// share sheet (Web Share API with files) when the browser offers one,
+// otherwise the file is downloaded and the mail client opens on the
+// prefilled message, the person attaches the file. Desktop: the macOS share
+// sheet, or save dialog + mail client elsewhere.
+async function shareThroughMailClient(message) {
+  const mailto = `mailto:${encodeURIComponent(message.to ?? "")}?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(message.body)}`;
   if (window.gmsDesktop?.shareByEmail) {
     const result = await window.gmsDesktop.shareByEmail({ ...message, mailto });
     if (!result) return;
@@ -1471,10 +1490,51 @@ async function shareByEmail() {
     }
   }
   downloadText(message.name, message.content);
-  window.open(mailto, "_self");
+  window.open(mailto, "_blank", "noopener");
   status.textContent = `${message.name} téléchargé : joins-le à l'e-mail`;
 }
-document.querySelector("#email-btn").addEventListener("click", () => shareByEmail().catch(error => { status.textContent = error.message; console.error("[share]", error); }));
+
+const emailDialog = document.querySelector("#email-dialog");
+const emailTo = document.querySelector("#email-to");
+const emailSubject = document.querySelector("#email-subject");
+const emailBody = document.querySelector("#email-body");
+
+// "Envoyer par e-mail…": recipients, subject and message are editable,
+// then Gmail sends it with the .md attached, or the mail client takes over.
+function shareByEmail() {
+  const message = emailMessage();
+  emailSubject.value = message.subject;
+  emailBody.value = message.body;
+  document.querySelector("#email-attachment").textContent = message.name;
+  showModal(emailDialog);
+  emailTo.focus();
+  const current = () => ({ ...message, to: emailTo.value.trim(), subject: emailSubject.value.trim() || message.subject, body: emailBody.value });
+  const finish = () => hideModal(emailDialog);
+  document.querySelector("#email-cancel").onclick = finish;
+  insertBackdrop.onclick = finish;
+  document.querySelector("#email-other").onclick = () => {
+    const draft = current();
+    finish();
+    shareThroughMailClient(draft).catch(error => { status.textContent = error.message; console.error("[share]", error); });
+  };
+  document.querySelector("#email-gmail").onclick = async () => {
+    const draft = current();
+    const button = document.querySelector("#email-gmail");
+    button.disabled = true;
+    status.textContent = "Envoi avec Gmail…";
+    try {
+      const recipients = await sendGmail({ to: draft.to, subject: draft.subject, text: draft.body, attachment: { name: draft.name, content: draft.content } });
+      finish();
+      status.textContent = `Envoyé avec Gmail à ${recipients.join(", ")}`;
+    } catch (error) {
+      status.textContent = error.message;
+      console.error("[gmail]", error);
+    } finally {
+      button.disabled = false;
+    }
+  };
+}
+document.querySelector("#email-btn").addEventListener("click", shareByEmail);
 
 function syncViewStateFromUrl() {
   const params = new URLSearchParams(window.location.search);
