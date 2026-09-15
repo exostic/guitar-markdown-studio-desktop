@@ -7,6 +7,7 @@ import { chordsBlockToEvents, gridToEvents, shapeToEvents } from "./chordEvents.
 import { ensureRunning, pluck, setSound } from "./engine.js";
 import { rhythmToEvents } from "./rhythmEvents.js";
 import { createTransport } from "./scheduler.js";
+import { stringMidi } from "@gms/guitar-markdown";
 import { measureBeatsFor, parseTimeSignature, tabToEvents } from "./tabEvents.js";
 
 const registry = new Map();
@@ -246,6 +247,55 @@ async function strumDiagram(item, settings) {
 
 // `onColumn(entry, measureIndex, eventIndex)` is told about every note
 // clicked in a notation block (the editor moves its cursor there).
+// A click on a grid cell: strum that bar's chord (both halves of a split
+// cell), with the cell lit up meanwhile.
+async function strumGridCell(cell, settings) {
+  const host = cell.closest("[id^='gms-grid-']");
+  const entry = host ? registry.get(host.id) : null;
+  const [rowIndex, cellIndex] = (cell.dataset.cell ?? "").split("-").map(Number);
+  const text = entry?.ast.rows[rowIndex]?.cells[cellIndex];
+  if (!text) return;
+  const measureBeats = measureBeatsFor(settings.timeSignature);
+  const { events, totalBeats } = gridToEvents({ rows: [{ cells: [text] }] }, { measureBeats, key: entry.ast.displayKey, semitones: settings.semitones, capo: settings.capo });
+  await ensureRunning();
+  setSound(settings.sound);
+  stopAll();
+  transport.play({ events, bpm: settings.bpm * getSpeed(entry.id), totalBeats, loop: false, id: `${host.id}:${cell.dataset.cell}`, onEnd: () => stopAll() });
+  setHighlight(cell);
+}
+
+// A click on the circle of fifths: strum the chord of that sector (major
+// ring or minor ring), lighting the sector meanwhile.
+async function strumCircleChord(element, settings) {
+  const name = element.dataset.chord;
+  const svg = element.closest(".circle-of-fifths");
+  if (!name || !svg) return;
+  const sector = svg.querySelector(`path[data-chord="${CSS.escape(name)}"]`) ?? element;
+  const measureBeats = measureBeatsFor(settings.timeSignature);
+  const { events, totalBeats } = gridToEvents({ rows: [{ cells: [name] }] }, { measureBeats, semitones: 0, capo: settings.capo });
+  await ensureRunning();
+  setSound(settings.sound);
+  stopAll();
+  transport.play({ events, bpm: settings.bpm, totalBeats, loop: false, id: `circle:${name}`, onEnd: () => stopAll() });
+  setHighlight(sector);
+}
+
+// A click on a note of a scale diagram: pluck that fret on that string, in
+// the diagram's tuning, with the dot lit for a moment.
+async function pluckScaleNote(note, settings) {
+  const host = note.closest(".fretboard-host");
+  const entry = host ? registry.get(host.id) : null;
+  const string = Number(note.dataset.string);
+  const fret = Number(note.dataset.fret);
+  if (!entry || !string || Number.isNaN(fret)) return;
+  const tuning = entry.ast.tuning ?? settings.tuning;
+  const ctx = await ensureRunning();
+  setSound(settings.sound);
+  pluck({ midi: stringMidi(tuning, string, fret, 0), time: ctx.currentTime, duration: 1.6, string });
+  note.classList.add("playing");
+  setTimeout(() => note.classList.remove("playing"), 600);
+}
+
 export function bindPlayback({ preview, getSettings, onColumn: columnHandler = null, onPlaying: playingHandler = null }) {
   previewEl = preview;
   onColumn = columnHandler;
@@ -291,6 +341,12 @@ export function bindPlayback({ preview, getSettings, onColumn: columnHandler = n
     }
     const item = event.target.closest(".svguitar-item");
     if (item && preview.classList.contains("web-mode")) await strumDiagram(item, getSettings());
+    const cell = event.target.closest(".grid-cell");
+    if (cell && preview.classList.contains("web-mode")) await strumGridCell(cell, getSettings());
+    const sector = event.target.closest(".circle-of-fifths [data-chord]");
+    if (sector && preview.classList.contains("web-mode")) await strumCircleChord(sector, getSettings());
+    const scaleNote = event.target.closest(".fretboard-host .fret-note");
+    if (scaleNote && preview.classList.contains("web-mode")) await pluckScaleNote(scaleNote, getSettings());
     const host = event.target.closest(".alphatab-host");
     if (host && preview.classList.contains("web-mode")) {
       const entry = registry.get(host.id);

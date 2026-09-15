@@ -56,12 +56,15 @@ export function renderFretboardScale(ast, target) {
       for (const note of notes) {
         if (note.fret < fretMin || note.fret > fretMax) continue;
         const x = noteX(note.fret, fretMin);
+        // A group per note with its string and fret: a click can play it.
+        parts.push(`<g class="fret-note" data-string="${string}" data-fret="${note.fret}">`);
         parts.push(`<circle cx="${x}" cy="${y}" r="${RADIUS}" fill="${note.color ?? color}" />`);
         if (note.label) {
           parts.push(
             `<text x="${x}" y="${y + 3}" font-size="9" font-weight="600" text-anchor="middle" fill="${note.textColor ?? "#ffffff"}">${escapeXml(note.label)}</text>`,
           );
         }
+        parts.push("</g>");
       }
     }
   }

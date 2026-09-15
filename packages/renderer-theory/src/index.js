@@ -89,10 +89,11 @@ export function renderCircleOfFifthsSvg(keyText, { size = 320 } = {}) {
     const minorClass = `cof-sector cof-minor${minorState ? ` ${minorState}` : ""}`;
     const [mx, my] = polar(cx, cy, (outer + middle) / 2, sector.index * step);
     const [nx, ny] = polar(cx, cy, (middle + inner) / 2, sector.index * step);
-    parts.push(`<path class="${majorClass}" d="${sectorPath(cx, cy, middle, outer, start, end)}" />`);
-    parts.push(`<path class="${minorClass}" d="${sectorPath(cx, cy, inner, middle, start, end)}" />`);
-    parts.push(`<text class="cof-label cof-label-major${majorLabelClass}" x="${mx.toFixed(2)}" y="${my.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${escapeHtml(sector.major)}</text>`);
-    parts.push(`<text class="cof-label cof-label-minor${minorLabelClass}" x="${nx.toFixed(2)}" y="${ny.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${escapeHtml(sector.minor)}</text>`);
+    // `data-chord` on sectors and labels: a click plays that chord.
+    parts.push(`<path class="${majorClass}" data-chord="${escapeHtml(sector.major)}" d="${sectorPath(cx, cy, middle, outer, start, end)}" />`);
+    parts.push(`<path class="${minorClass}" data-chord="${escapeHtml(sector.minor)}" d="${sectorPath(cx, cy, inner, middle, start, end)}" />`);
+    parts.push(`<text class="cof-label cof-label-major${majorLabelClass}" data-chord="${escapeHtml(sector.major)}" x="${mx.toFixed(2)}" y="${my.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${escapeHtml(sector.major)}</text>`);
+    parts.push(`<text class="cof-label cof-label-minor${minorLabelClass}" data-chord="${escapeHtml(sector.minor)}" x="${nx.toFixed(2)}" y="${ny.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${escapeHtml(sector.minor)}</text>`);
   });
 
   const centreLabel = key ? escapeHtml(key.name) : "";

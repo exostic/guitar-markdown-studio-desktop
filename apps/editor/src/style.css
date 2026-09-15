@@ -1180,11 +1180,14 @@ button:focus-visible,
   gap: 0.2rem;
 }
 .stroke {
+  /* inline-block so the playing scale below applies */
+  display: inline-block;
   font-family: Georgia, "Times New Roman", serif;
   font-size: calc(1.7rem * var(--rhythm-scale));
   font-weight: 800;
   line-height: 1;
   color: var(--doc-ink);
+  transition: transform 0.08s ease, opacity 0.08s ease;
 }
 .stroke.ghost {
   color: #c7c7d6;
@@ -1467,6 +1470,9 @@ pre {
 }
 
 /* Playback highlights */
+.course-page.web-mode:not(.export-static) .grid-cell {
+  cursor: pointer;
+}
 .grid-cell.playing {
   background: var(--doc-tint);
   box-shadow: inset 0 -3px 0 var(--doc-primary);
@@ -1474,6 +1480,12 @@ pre {
 .stroke.playing {
   color: var(--doc-primary);
   transform: scale(1.15);
+}
+/* A ghost stroke (lowercase: b, h) lights up smaller and see-through, so it
+   still reads as the light stroke next to a full one. */
+.stroke.ghost.playing {
+  opacity: 0.5;
+  transform: scale(0.85);
 }
 .svguitar-item.playing {
   border-color: var(--doc-primary);
@@ -1591,6 +1603,20 @@ pre {
 }
 .cof-sector.cof-neighbor {
   fill: #ede7fa;
+}
+.course-page.web-mode:not(.export-static) .cof-sector,
+.course-page.web-mode:not(.export-static) .cof-label {
+  cursor: pointer;
+}
+.cof-sector.playing {
+  fill: var(--doc-primary);
+}
+.course-page.web-mode:not(.export-static) .fret-note {
+  cursor: pointer;
+}
+.fret-note.playing circle {
+  stroke: var(--doc-primary);
+  stroke-width: 3;
 }
 .cof-sector.cof-key {
   fill: var(--doc-primary);

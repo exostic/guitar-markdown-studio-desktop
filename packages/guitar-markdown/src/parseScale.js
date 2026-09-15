@@ -172,7 +172,9 @@ export function parseScale(source, options = {}) {
     fretRange = [Math.min(...allFrets), Math.max(...allFrets)];
   }
 
-  const ast = { type: "scale", fretRange, dim, highlight };
+  // `tuning`: the diagram's tuning (block `tuning:` or the document's), so
+  // a note clicked on it can sound at its real pitch.
+  const ast = { type: "scale", fretRange, dim, highlight, tuning };
   if (meta) ast.meta = meta;
   return ast;
 }
