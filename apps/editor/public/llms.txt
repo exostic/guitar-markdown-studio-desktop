@@ -272,7 +272,9 @@ tuning: DADGAD
 ```
 ````
 
-Web mode: six buttons that play each open string. Print modes: a string / note / frequency table.
+Web mode: six buttons that play each open string, and a "🎤 Accorder au micro" button that
+listens to the microphone and shows the detected note, the offset in cents on a needle, and the
+nearest string of the tuning with tune-up/down advice. Print modes: a string / note / frequency table.
 Without `tuning:` the front matter tuning is used.
 
 ### Layout blocks (empty blocks, each alone on its line)

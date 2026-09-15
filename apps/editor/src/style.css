@@ -1687,6 +1687,95 @@ pre {
   font-weight: 500;
   opacity: 0.8;
 }
+.mic-tuner {
+  margin-top: 0.75rem;
+}
+.mic-tuner-toggle {
+  font-size: 0.8rem;
+}
+.mic-tuner.listening .mic-tuner-toggle {
+  background: var(--doc-accent);
+  color: #fff;
+  border-color: var(--doc-accent);
+}
+.mic-tuner-readout {
+  margin-top: 0.6rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--doc-tint-border);
+  border-radius: 12px;
+  background: var(--doc-tint);
+  text-align: center;
+}
+.mic-tuner-readout[hidden] {
+  display: none;
+}
+.mic-tuner-note {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--doc-heading);
+}
+.mic-tuner.in-tune .mic-tuner-note {
+  color: #16a34a;
+}
+.mic-tuner-meter {
+  position: relative;
+  height: 14px;
+  margin: 0.6rem auto 0.35rem;
+  max-width: 22rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f97316 0%, #fde68a 40%, #86efac 48%, #86efac 52%, #fde68a 60%, #f97316 100%);
+}
+.mic-tuner-tick {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 22px;
+  background: color-mix(in srgb, var(--doc-ink) 45%, transparent);
+}
+.mic-tuner-tick-left {
+  left: 25%;
+}
+.mic-tuner-tick-centre {
+  left: 50%;
+  background: var(--doc-ink);
+}
+.mic-tuner-tick-right {
+  left: 75%;
+}
+.mic-tuner-needle {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 4px;
+  height: 28px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--doc-primary);
+  box-shadow: 0 0 0 2px #fff;
+  transition: left 0.08s linear;
+}
+.mic-tuner.in-tune .mic-tuner-needle {
+  background: #16a34a;
+}
+.mic-tuner-detail {
+  font-size: 0.8rem;
+  color: var(--doc-muted);
+}
+.mic-tuner-hint {
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--doc-heading);
+}
+.tuner-string.target {
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--doc-primary) 30%, transparent);
+}
+.tuner-string.in-tune {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 2px rgb(22 163 74 / 0.3);
+}
 .tuner-table {
   border-collapse: collapse;
   font-size: 0.9rem;

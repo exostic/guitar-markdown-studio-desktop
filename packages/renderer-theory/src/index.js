@@ -131,6 +131,15 @@ export function renderTunerHtml(ast) {
   return `<figure class="guitar-block tuner-block">
     <div class="tuner-header"><strong>Accordeur</strong> <span class="tuner-tuning">${escapeHtml(ast.tuning.label)}</span></div>
     <div class="tuner-strings block-web">${buttons}</div>
+    <div class="mic-tuner block-web">
+      <button type="button" class="mic-tuner-toggle">🎤 Accorder au micro</button>
+      <div class="mic-tuner-readout" hidden>
+        <div class="mic-tuner-note">—</div>
+        <div class="mic-tuner-meter"><span class="mic-tuner-tick mic-tuner-tick-left"></span><span class="mic-tuner-tick mic-tuner-tick-centre"></span><span class="mic-tuner-tick mic-tuner-tick-right"></span><div class="mic-tuner-needle"></div></div>
+        <div class="mic-tuner-detail"><span class="mic-tuner-cents"></span> <span class="mic-tuner-hz"></span></div>
+        <div class="mic-tuner-hint"></div>
+      </div>
+    </div>
     <table class="tuner-table block-print"><thead><tr><th>Corde</th><th>Note</th><th>Fréquence</th></tr></thead><tbody>${rows}</tbody></table>
   </figure>`;
 }

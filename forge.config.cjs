@@ -4,6 +4,8 @@ module.exports = {
     executableName: 'guitar-markdown-studio',
     appBundleId: 'com.exostic.guitarmarkdownstudio',
     appCategoryType: 'public.app-category.music',
+    // macOS asks the user before the tuner can use the microphone.
+    extendInfo: { NSMicrophoneUsageDescription: "L'accordeur écoute votre guitare pour vous aider à l'accorder." },
     asar: true,
     ignore: [
       /^\/\.git($|\/)/,

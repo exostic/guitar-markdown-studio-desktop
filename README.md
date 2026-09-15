@@ -198,6 +198,8 @@ tuning: DADGAD
 ```
 ````
 
+En mode Web, six boutons jouent chaque corde à vide, et **🎤 Accorder au micro** écoute la guitare : le panneau affiche la note entendue, l'écart en cents sur une aiguille, et indique la corde de l'accordage la plus proche avec la consigne (tendez / détendez / juste). Le navigateur demande l'accès au micro la première fois. À l'impression, un tableau corde / note / fréquence remplace le tout.
+
 En mode Web, six boutons jouent la note de chaque corde à vide. En mode Livre/Poster (et dans l'export HTML), un tableau corde / note / fréquence. Sans ligne `tuning:`, l'accordage du front matter est utilisé.
 
 ## Importer un fichier Guitar Pro

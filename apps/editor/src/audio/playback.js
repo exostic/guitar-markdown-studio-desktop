@@ -3,6 +3,7 @@
 // and single chord diagrams; cues from the scheduler drive `.playing`
 // highlights on measures, diagrams, grid cells and strokes.
 import { alphaTabBarHighlight, alphaTabBeatElements, alphaTabEventAtPoint } from "../alphatab.js";
+import { isMicTunerRunning, startMicTuner, stopMicTuner } from "./micTuner.js";
 import { chordsBlockToEvents, gridToEvents, shapeToEvents } from "./chordEvents.js";
 import { ensureRunning, pluck, setSound } from "./engine.js";
 import { rhythmToEvents } from "./rhythmEvents.js";
@@ -68,6 +69,7 @@ function showCursor() {
 
 export function stopAll() {
   transport.stop();
+  stopMicTuner();
   clearHighlight();
   activeButton?.classList.remove("active", "paused");
   if (activeButton?.classList.contains("play-button")) activeButton.textContent = PLAY_LABEL;
@@ -314,6 +316,23 @@ export function bindPlayback({ preview, getSettings, onColumn: columnHandler = n
     if (entry) await startBlock(activeButton, entry, getSettings());
   });
   preview.addEventListener("click", async event => {
+    const micToggle = event.target.closest(".mic-tuner-toggle");
+    if (micToggle) {
+      const panel = micToggle.closest(".mic-tuner");
+      if (isMicTunerRunning() && panel.classList.contains("listening")) {
+        stopMicTuner();
+        return;
+      }
+      const strings = [...panel.closest(".tuner-block").querySelectorAll(".tuner-string")].map(element => ({
+        element,
+        midi: Number(element.dataset.midi),
+        frequency: Number(element.dataset.frequency),
+        number: element.querySelector(".tuner-number")?.textContent ?? "",
+        note: element.querySelector(".tuner-note")?.textContent ?? "",
+      }));
+      await startMicTuner(panel, strings);
+      return;
+    }
     const tunerString = event.target.closest(".tuner-string");
     if (tunerString) {
       const ctx = await ensureRunning();
