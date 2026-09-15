@@ -21,6 +21,7 @@ import {
 import { renderCircleOfFifthsSvg, renderKeyChartHtml, renderTunerHtml } from "@gms/renderer-theory";
 
 let blockCounter = 0;
+let frontMatterLines = 0;
 let currentTimeSignature = "4/4";
 let currentTuning = parseTuning("");
 // Document-level transposition (front matter `transpose`, `capo`, `sounding`,
@@ -171,7 +172,9 @@ export function parseFrontMatter(source) {
     const value = line.slice(separatorIndex + 1).trim();
     if (key) data[key] = value;
   }
-  return { data, content: source.slice(match[0].length) };
+  // `offsetLines`: lines the front matter takes, so positions found in
+  // `content` can be mapped back to the full source.
+  return { data, content: source.slice(match[0].length), offsetLines: match[0].split(/\r?\n/).length - 1 };
 }
 
 function renderHeader(data) {
@@ -214,14 +217,17 @@ md.renderer.rules.fence = (tokens, index, options, env, self) => {
     const id = `gms-${language}-${blockCounter++}`;
     // Option lines inside the block: `sound:` picks the instrument for this
     // block only (a clean intro in a distorted song), `grid:` the rhythm
-    // cells per bar of the engraved rhythm and `staff:` what to draw (tab,
-    // partition, both).
-    const { body, sound, grid, staff } = extractBlockOptions(token.content);
+    // cells per bar of the engraved rhythm, `staff:` what to draw (tab,
+    // partition, both); `tempo:`, `time:`, `tuning:` and `capo:` give the
+    // block its own settings (an imported song in another document).
+    const { body, sound, grid, staff, tempo, timeSignature, tuning, capo } = extractBlockOptions(token.content);
     try {
-      const ast = parseAsciiTab(body, { timeSignature: currentTimeSignature, tuning: currentTuning.notes });
+      const ast = parseAsciiTab(body, { timeSignature: timeSignature ?? currentTimeSignature, tuning: (tuning ?? currentTuning).notes });
       for (const measure of ast.measures) measure.chord = displayChord(measure.chord);
-      pendingRenders.push({ type: language, id, ast, sound, grid, staff });
-      return `<figure class="guitar-block ${language}-block">${playButtonHtml(language, id)}<div id="${id}" class="alphatab-host"></div><details><summary>Source ASCII</summary><pre><code>${escapeHtml(body)}</code></pre></details></figure>`;
+      // `sourceLine`: document line of the block's first content line, so a
+      // note clicked in the preview can be found in the editor.
+      pendingRenders.push({ type: language, id, ast, sound, grid, staff, tempo, timeSignature, tuning, capo, sourceLine: token.map ? frontMatterLines + token.map[0] + 1 : null });
+      return `<figure class="guitar-block ${language}-block">${playButtonHtml(language, id)}<div id="${id}" class="alphatab-host"></div><details><summary>Source ASCII</summary><pre><code>${escapeHtml(body.replace(/^\n+/, ""))}</code></pre></details></figure>`;
     } catch (error) {
       return blockError(language === "tab" ? "Tablature invalide" : "Partition invalide", error.message, token.content);
     }
@@ -473,7 +479,8 @@ md.renderer.rules.link_close = (tokens, index, options) => {
 export function renderMarkdown(source) {
   blockCounter = 0;
   pendingRenders.length = 0;
-  const { data, content } = parseFrontMatter(source);
+  const { data, content, offsetLines = 0 } = parseFrontMatter(source);
+  frontMatterLines = offsetLines;
   currentTimeSignature = data.time ?? "4/4";
   currentTuning = parseTuning(data.tuning ?? "") ?? parseTuning("");
   const transposeMatch = /^([+-]?\d+)$/.exec((data.transpose ?? "").trim());

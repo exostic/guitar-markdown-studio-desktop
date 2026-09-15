@@ -4,10 +4,16 @@ import { extractBlockOptions, parseStaff } from "./blockOptions.js";
 
 test("extractBlockOptions lit sound: et grid: en tête d'un bloc", () => {
   const { body, sound, grid } = extractBlockOptions("sound: clean\ngrid: 8\ne|--3--|\nB|-----|");
-  assert.equal(body, "e|--3--|\nB|-----|");
+  assert.equal(body, "\n\ne|--3--|\nB|-----|", "les lignes d'option deviennent des lignes vides : la numérotation tient");
   assert.equal(sound, "electric");
   assert.equal(grid, 8);
-  assert.deepEqual(extractBlockOptions("e|--3--|"), { body: "e|--3--|", sound: null, grid: null, staff: null });
+  assert.deepEqual(extractBlockOptions("e|--3--|"), { body: "e|--3--|", sound: null, grid: null, staff: null, tempo: null, timeSignature: null, tuning: null, capo: null });
+  const song = extractBlockOptions("tempo: 140\ntime: 3/4\ntuning: Drop D\ncapo: 2\ne|--3--|");
+  assert.equal(song.body, "\n\n\n\ne|--3--|");
+  assert.equal(song.tempo, 140);
+  assert.equal(song.timeSignature, "3/4");
+  assert.equal(song.tuning.name, "drop d");
+  assert.equal(song.capo, 2);
   assert.equal(extractBlockOptions("staff: tab et partition\ne|--3--|").staff, "score tabs");
 });
 

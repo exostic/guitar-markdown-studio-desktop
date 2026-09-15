@@ -52,12 +52,19 @@ ipcMain.handle('document:open', async () => {
     title: 'Ouvrir un cours de guitare',
     properties: ['openFile'],
     filters: [
+      { name: 'Markdown et Guitar Pro', extensions: ['md', 'markdown', 'gp', 'gp3', 'gp4', 'gp5', 'gpx'] },
       { name: 'Markdown', extensions: ['md', 'markdown'] },
+      { name: 'Guitar Pro', extensions: ['gp', 'gp3', 'gp4', 'gp5', 'gpx'] },
       { name: 'Tous les fichiers', extensions: ['*'] },
     ],
   });
   if (result.canceled || !result.filePaths[0]) return null;
   const filePath = result.filePaths[0];
+  // Guitar Pro files are binary: handed over as base64, the renderer
+  // translates them to Markdown.
+  if (/\.(gp[345x]?)$/i.test(filePath)) {
+    return { filePath, bytes: (await fs.readFile(filePath)).toString('base64') };
+  }
   return { filePath, content: await fs.readFile(filePath, 'utf8') };
 });
 

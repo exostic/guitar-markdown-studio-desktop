@@ -89,7 +89,9 @@ B|--------------8b10r8----8b---8br--------|
 
 La lecture audio suit ces techniques : les slides, bends et releases glissent la hauteur de la note sans la repincer, les hammer-on, pull-off et tapping jouent l'arrivée en legato, le vibrato fait onduler la note, les harmoniques sonnent comme une cloche.
 
-Une ligne `sound: clean` (ou `acoustic`, `distortion`) dans un bloc `tab` ou `partition` remplace le `sound` du front matter pour ce bloc seulement, par exemple une intro claire dans un morceau saturé.
+Une ligne `sound: clean` (ou `acoustic`, `distortion`) dans un bloc `tab` ou `partition` remplace le `sound` du front matter pour ce bloc seulement, par exemple une intro claire dans un morceau saturé. De la même façon, `tempo: 120`, `time: 3/4`, `tuning: Drop D` et `capo: 2` en tête d'un bloc lui donnent ses propres réglages de lecture et de gravure, utile pour un morceau importé dans un document qui en a d'autres.
+
+Un bloc peut contenir plusieurs groupes de six lignes (avec, au-dessus de chacun, sa ligne d'accords) : ils sont lus comme des mesures qui se suivent, ce qui permet d'écrire un morceau long sur des lignes courtes.
 
 Le bloc `partition` accepte exactement la même syntaxe ASCII que `tab`, mais affiche une portée de notation musicale au lieu d'une tablature. Une ligne `staff: tab`, `staff: partition` ou `staff: tab et partition` en tête du bloc choisit ce qui est dessiné ; la même clé `staff` dans le front matter fixe le choix pour tout le document.
 
@@ -198,11 +200,19 @@ tuning: DADGAD
 
 En mode Web, six boutons jouent la note de chaque corde à vide. En mode Livre/Poster (et dans l'export HTML), un tableau corde / note / fréquence. Sans ligne `tuning:`, l'accordage du front matter est utilisé.
 
+## Importer un fichier Guitar Pro
+
+Le bouton **Importer** (ou **Ouvrir** sur le bureau) accepte aussi un fichier Guitar Pro (`.gp3`, `.gp4`, `.gp5`, `.gpx`, `.gp`). Le fichier est lu par alphaTab puis traduit et **ajouté en fin de document**, sous un titre au nom du morceau, sans toucher à ce qui est déjà écrit : chaque piste à six cordes devient un bloc `tab` avec `staff: tab et partition`, les mesures réparties sur des lignes d'au plus quatre mesures et une centaine de caractères, et ses propres lignes `tempo:`, `time:`, `tuning:`, `capo:` et `sound:`, pour se jouer et se graver comme dans le fichier. Un éditeur vide reçoit à la place un document complet, avec le front matter tiré du fichier.
+
+Le composant **Guitar Pro** du menu **+** fait la même traduction mais insère les blocs à l'emplacement du curseur, sans titre ni note.
+
+Le rythme est écrit dans l'espacement des colonnes (cases égales par mesure), les techniques deviennent la notation ASCII (`h`, `p`, `/`, `\\`, `b`, `br`, `~`, `(n)`, `<n>`, `x`) et les noms d'accords sont repris au-dessus des mesures. Quand le fichier contient plusieurs pistes utilisables, une fenêtre demande lesquelles importer (instrument, nombre de mesures et de notes à l'appui). Les pistes de basse ou de percussions, les changements de mesure en cours de morceau et les voix secondaires ne sont pas repris : une remarque en tête des blocs le signale.
+
 ## Lecture audio (mode Web)
 
 En mode Web, un bouton **▶ Écouter** apparaît au-dessus des blocs `tab`, `partition`, `chords`, `grid` et `rhythm` :
 
-- tablature / partition : chaque note est jouée par une corde pincée synthétisée (Karplus-Strong, une couleur par corde, caisse de résonance et pièce synthétisées, accords égrenés et jeu légèrement humanisé), au tempo du front matter, la note (ou l'accord) en cours passe en rose sur la portée et la tablature ; un clic sur une note la joue seule et y place le curseur, et **▶ Écouter** repart de ce curseur (il s'efface quand la lecture atteint la fin du bloc) ;
+- tablature / partition : chaque note est jouée par une corde pincée synthétisée (Karplus-Strong, une couleur par corde, caisse de résonance et pièce synthétisées, accords égrenés et jeu légèrement humanisé), au tempo du front matter, la mesure en cours est encadrée et la note (ou l'accord) en cours passe en rose sur la portée et la tablature ; un clic sur une note la joue seule, y place le curseur de lecture, et sélectionne la note correspondante dans le Markdown (l'éditeur défile jusqu'à elle) ; **▶ Écouter** repart de ce curseur (il s'efface quand la lecture atteint la fin du bloc) ; pendant la lecture, l'aperçu suit la note en cours (l'éditeur, lui, ne bouge pas) ; la touche **Espace** met en pause, reprend, ou relance le dernier bloc écouté quand le focus n'est pas dans un champ de texte ;
 - accords : chaque diagramme est gratté tour à tour (un clic sur un diagramme le gratte seul) ;
 - grille : un accord par mesure (reprises et `xN` respectés, chiffres romains résolus dans la tonalité) ;
 - rythmique : la frappe en boucle avec le métronome, la frappe en cours est surlignée.

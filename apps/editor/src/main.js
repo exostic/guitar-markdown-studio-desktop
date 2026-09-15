@@ -8,9 +8,9 @@ import { renderMarkdown, parseFrontMatter, renderQrSvg } from "./markdown.js";
 import { renderChordDiagrams } from "@gms/renderer-svguitar";
 import { renderFretboardScale } from "@gms/renderer-fretboard";
 import { parseTuning } from "@gms/guitar-markdown";
-import { bindPlayback, clearRegistry, registerBlock, stopAll, syncSpeedControls } from "./audio/playback.js";
+import { bindPlayback, clearRegistry, registerBlock, stopAll, syncSpeedControls, togglePlayPause } from "./audio/playback.js";
 import { parseSound } from "./audio/sound.js";
-import { destroyAlphaTabBlocks, renderAlphaTabBlock } from "./alphatab.js";
+import { destroyAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPro, onAlphaTabRendered, renderAlphaTabBlock } from "./alphatab.js";
 import { parseStaff } from "./blockOptions.js";
 import LZString from "lz-string";
 
@@ -73,7 +73,7 @@ app.innerHTML = `
       <span id="status">Prêt</span>
       <div class="actions-group">
         <button id="open-md">Ouvrir</button>
-        <label class="button browser-import">Importer<input id="import-file" type="file" accept=".md,.markdown" hidden></label>
+        <label class="button browser-import" title="Ouvrir un cours Markdown ou importer un fichier Guitar Pro">Importer<input id="import-file" type="file" accept=".md,.markdown,.gp,.gp3,.gp4,.gp5,.gpx" hidden></label>
         <button id="download-md">Enregistrer .md</button>
         <button id="reset">Exemple</button>
       </div>
@@ -88,11 +88,21 @@ app.innerHTML = `
   <section class="workspace">
     <button id="edit-toggle" class="edit-toggle" type="button" hidden>✎ Éditer</button>
     <div class="insert-backdrop" id="insert-backdrop" hidden></div>
+    <div class="track-picker" id="track-picker" role="dialog" aria-modal="true" aria-labelledby="track-picker-title" hidden>
+      <div class="insert-menu-heading">Pistes à importer</div>
+      <h2 id="track-picker-title" class="track-picker-title"></h2>
+      <div class="track-picker-list" id="track-picker-list"></div>
+      <div class="track-picker-actions">
+        <button type="button" id="track-picker-cancel">Annuler</button>
+        <button type="button" id="track-picker-ok" class="primary">Importer</button>
+      </div>
+    </div>
     <div class="insert-menu" id="insert-menu" role="menu" aria-label="Insérer un composant" hidden>
       <div class="insert-menu-section">
         <div class="insert-menu-heading">Notation</div>
         <button data-insert="tab">Tablature</button>
         <button data-insert="partition">Partition</button>
+        <label class="button insert-file" title="Choisir un fichier Guitar Pro : ses pistes sont insérées ici, portée et tablature">Guitar Pro<input id="insert-gp" type="file" accept=".gp,.gp3,.gp4,.gp5,.gpx" hidden></label>
         <button data-insert="chords">Accords</button>
         <button data-insert="rhythm">Rythmique</button>
         <button data-insert="grid">Grille</button>
@@ -117,7 +127,7 @@ app.innerHTML = `
     </div>
     <section class="pane editor-pane" id="editor-pane">
       <div class="pane-title pane-title-row" id="editor-pane-title"><span>Markdown</span><button id="insert-open" class="insert-open" type="button" title="Insérer un composant" aria-haspopup="menu" aria-expanded="false">+</button></div>
-      <textarea id="editor" spellcheck="false"></textarea>
+      <textarea id="editor" spellcheck="false" wrap="off"></textarea>
     </section>
     <div class="resizer" id="pane-resizer"></div>
     <section class="pane preview-pane">
@@ -223,10 +233,10 @@ function drawPending(renders) {
       // the front matter `staff` or the block's own `staff:` line overrides.
       renderAlphaTabBlock(target, render.ast, {
         staff: render.staff ?? docSettings.staff ?? (render.type === "tab" ? "tabs" : "score"),
-        tempo: docSettings.bpm,
-        tuning: docSettings.tuning,
-        capo: docSettings.capo,
-        timeSignature: docSettings.timeSignature,
+        tempo: render.tempo ?? docSettings.bpm,
+        tuning: render.tuning ?? docSettings.tuning,
+        capo: render.capo ?? docSettings.capo,
+        timeSignature: render.timeSignature ?? docSettings.timeSignature,
         sound: render.sound ?? docSettings.sound,
         grid: render.grid,
       });
@@ -710,7 +720,107 @@ function refreshDocSettings(data) {
   };
 }
 
-bindPlayback({ preview, getSettings: () => docSettings });
+// A note clicked in the preview: select its fret in the Markdown and
+// scroll the editor to it (the scroll sync is held off meanwhile, or the
+// preview would jump too).
+function revealColumn(entry, measureIndex, eventIndex) {
+  if (editorPane.hidden) return;
+  const at = columnPosition(entry, measureIndex, eventIndex);
+  if (!at) return;
+  const lines = editor.value.split("\n");
+  if (at.line >= lines.length) return;
+  let offset = 0;
+  for (let index = 0; index < at.line; index += 1) offset += lines[index].length + 1;
+  const start = offset + at.column;
+  const end = start + at.length;
+  editor.focus({ preventScroll: true });
+  editor.setSelectionRange(start, end);
+  // The preview must stay where the reader clicked: the scroll event this
+  // raises is dispatched later, so the sync is held off until it has passed.
+  ignoreEditorScroll = true;
+  editor.scrollTop = Math.max(0, caretTop(editor, start) - editor.clientHeight / 2);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    ignoreEditorScroll = false;
+  }));
+}
+
+// Vertical position of a character in the textarea, soft wraps included: a
+// hidden mirror with the same font, width and wrapping holds the text up to
+// that character, and a marker at its end gives the height.
+function caretTop(textarea, index) {
+  const mirror = document.createElement("div");
+  const style = getComputedStyle(textarea);
+  for (const property of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "paddingTop", "paddingBottom", "paddingLeft", "paddingRight", "borderTopWidth", "borderBottomWidth", "boxSizing", "tabSize"]) {
+    mirror.style[property] = style[property];
+  }
+  mirror.style.position = "absolute";
+  mirror.style.visibility = "hidden";
+  mirror.style.top = "0";
+  mirror.style.left = "-9999px";
+  mirror.style.width = `${textarea.clientWidth}px`;
+  // Same wrapping as the textarea: none (long tab lines scroll sideways).
+  mirror.style.whiteSpace = textarea.wrap === "off" ? "pre" : "pre-wrap";
+  mirror.style.overflowWrap = textarea.wrap === "off" ? "normal" : "break-word";
+  mirror.textContent = textarea.value.slice(0, index);
+  const marker = document.createElement("span");
+  marker.textContent = "\u200b";
+  mirror.appendChild(marker);
+  document.body.appendChild(mirror);
+  const top = marker.offsetTop;
+  mirror.remove();
+  return top;
+}
+
+// Where a column sits in the editor: document line, and character column
+// on that line. Null when the block cannot be traced back.
+function columnPosition(entry, measureIndex, eventIndex) {
+  if (entry.sourceLine === null || entry.sourceLine === undefined) return null;
+  const measure = entry.ast.measures[measureIndex];
+  const position = measure?.events[eventIndex]?.positions[0];
+  const source = position && measure.sources?.[position.string];
+  if (!source) return null;
+  return { line: entry.sourceLine + source.line, column: source.column + position.column, length: position.length ?? 1, position };
+}
+
+// While a block plays in Web mode, the preview keeps what is lit up in its
+// middle band (a note, a chord diagram, a grid cell, a stroke). The editor
+// never moves on its own during playback.
+function followPreview(elements) {
+  if (!webMode || fitToPage || !elements.length) return;
+  const paneRect = previewPane.getBoundingClientRect();
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const element of elements) {
+    const rect = element.getBoundingClientRect();
+    if (!rect.height) continue;
+    top = Math.min(top, rect.top - paneRect.top + previewPane.scrollTop);
+    bottom = Math.max(bottom, rect.bottom - paneRect.top + previewPane.scrollTop);
+  }
+  if (top === Infinity) return;
+  const view = previewPane.clientHeight;
+  if (top >= previewPane.scrollTop + view * 0.2 && bottom <= previewPane.scrollTop + view * 0.8) return;
+  ignorePreviewScroll = true;
+  previewPane.scrollTop = Math.max(0, (top + bottom) / 2 - view / 2);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    ignorePreviewScroll = false;
+  }));
+}
+
+bindPlayback({
+  preview,
+  getSettings: () => docSettings,
+  onColumn: revealColumn,
+  onPlaying: (entry, cue, elements) => followPreview(elements),
+});
+
+// Space pauses and resumes playback (or starts the last block again) when
+// the focus is not in a text field.
+document.addEventListener("keydown", event => {
+  if (event.key !== " " || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+  const target = event.target;
+  if (target.closest?.("input, textarea, select, button, [contenteditable=\"true\"]")) return;
+  if (togglePlayPause()) event.preventDefault();
+});
 
 function update() {
   try {
@@ -718,8 +828,21 @@ function update() {
     // rebuilt below — an orphaned scheduler with no way to click-to-stop it
     // would otherwise keep playing forever.
     stopAll();
+    // Rebuilding the preview must not move it: alphaTab blocks come back
+    // empty for a moment, which would shrink the pane and clamp its scroll
+    // (a long score would jump to its top at every keystroke). Each new host
+    // keeps its previous height as a placeholder until it is engraved, the
+    // scroll position is put back after the rebuild, and the editor is not
+    // synced to any scroll event the rebuild raises.
+    const savedScroll = previewPane.scrollTop;
+    const previousHeights = new Map([...preview.querySelectorAll(".alphatab-host")].map(host => [host.id, host.getBoundingClientRect().height]));
+    ignorePreviewScroll = true;
     const result = renderMarkdown(editor.value);
     preview.innerHTML = result.html;
+    for (const host of preview.querySelectorAll(".alphatab-host")) {
+      const height = previousHeights.get(host.id);
+      if (height) host.style.minHeight = `${height}px`;
+    }
     preview.classList.toggle("web-mode", webMode);
     const { data } = parseFrontMatter(editor.value);
     refreshDocSettings(data);
@@ -759,9 +882,18 @@ function update() {
     fitChordGrids();
     if (!webMode) applyZoomScale();
     fitBookPageToWidth();
+    // Put the scroll back now, and again once every block is engraved: a
+    // block without a placeholder (new, or grown) leaves the pane too short
+    // for the position until then.
+    previewPane.scrollTop = savedScroll;
+    pendingPreviewScroll = preview.querySelector(".alphatab-host:not([data-rendered])") ? savedScroll : null;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      ignorePreviewScroll = false;
+    }));
     sessionStorage.setItem(STORAGE_KEY, editor.value);
     status.textContent = "Sauvegardé";
   } catch (error) {
+    ignorePreviewScroll = false;
     status.textContent = "Erreur";
     preview.innerHTML = `<div class="block-error">${error.message}</div>`;
   }
@@ -807,6 +939,23 @@ editor.addEventListener("keydown", event => {
 // preview in standard mode only — in landscape/fit-to-page mode the preview's
 // content is restructured into columns/pages, so line order no longer matches.
 let syncingScroll = false;
+// Set while the editor is scrolled programmatically (a note revealed from
+// the preview): that scroll must not drag the preview along. The same for
+// the preview while it is rebuilt.
+let ignoreEditorScroll = false;
+let ignorePreviewScroll = false;
+// Preview scroll position to restore when the last block finishes engraving.
+let pendingPreviewScroll = null;
+onAlphaTabRendered(() => {
+  if (pendingPreviewScroll === null || preview.querySelector(".alphatab-host:not([data-rendered])")) return;
+  const target = pendingPreviewScroll;
+  pendingPreviewScroll = null;
+  ignorePreviewScroll = true;
+  previewPane.scrollTop = target;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    ignorePreviewScroll = false;
+  }));
+});
 function scrollRatio(el) {
   return el.scrollHeight > el.clientHeight ? el.scrollTop / (el.scrollHeight - el.clientHeight) : 0;
 }
@@ -814,13 +963,13 @@ function applyScrollRatio(el, ratio) {
   el.scrollTop = ratio * (el.scrollHeight - el.clientHeight);
 }
 editor.addEventListener("scroll", () => {
-  if (fitToPage || syncingScroll) return;
+  if (fitToPage || syncingScroll || ignoreEditorScroll) return;
   syncingScroll = true;
   applyScrollRatio(previewPane, scrollRatio(editor));
   syncingScroll = false;
 });
 previewPane.addEventListener("scroll", () => {
-  if (fitToPage || syncingScroll) return;
+  if (fitToPage || syncingScroll || ignorePreviewScroll) return;
   syncingScroll = true;
   applyScrollRatio(editor, scrollRatio(previewPane));
   syncingScroll = false;
@@ -1165,6 +1314,7 @@ async function buildWebExportDocument(title) {
   // back to its printable table. Highlight state is stripped as well.
   const exported = preview.cloneNode(true);
   exported.querySelectorAll(".playing, .active").forEach(el => el.classList.remove("playing", "active"));
+  exported.querySelectorAll(".at-bar-highlight").forEach(el => el.remove());
   exported.querySelectorAll("[data-alphatex]").forEach(el => delete el.dataset.alphatex);
   const html = `<!doctype html>
 <html lang="fr">
@@ -1235,6 +1385,11 @@ if (window.gmsDesktop) {
   openButton.addEventListener("click", async () => {
     const result = await window.gmsDesktop.openMarkdown();
     if (!result) return;
+    if (result.bytes) {
+      // A Guitar Pro file: translated and added to the current document.
+      await importGuitarPro(Uint8Array.from(atob(result.bytes), char => char.charCodeAt(0)), { sourceName: result.filePath.split(/[\\/]/).pop() });
+      return;
+    }
     currentFilePath = result.filePath;
     editor.value = result.content;
     update();
@@ -1244,11 +1399,94 @@ if (window.gmsDesktop) {
   openButton.remove();
 }
 
+// Which tracks of a Guitar Pro file to convert. One usable track needs no
+// question; otherwise a dialog lists them all, the usable ones ticked, and
+// resolves to the chosen indexes, or null when cancelled.
+const trackPicker = document.querySelector("#track-picker");
+const trackPickerList = document.querySelector("#track-picker-list");
+function chooseTracks(title, tracks) {
+  const usable = tracks.filter(track => track.eligible);
+  if (usable.length <= 1) return Promise.resolve(usable.map(track => track.index));
+  document.querySelector("#track-picker-title").textContent = title || "Fichier Guitar Pro";
+  trackPickerList.innerHTML = tracks.map(track => `<label class="track-picker-row${track.eligible ? "" : " disabled"}">
+    <input type="checkbox" value="${track.index}" ${track.eligible ? "checked" : "disabled"}>
+    <span class="track-picker-name">${escapeHtml(track.name)}</span>
+    <span class="track-picker-meta">${escapeHtml(track.instrument)} · ${track.bars} mesures · ${track.notes} notes${track.reason ? ` · ${escapeHtml(track.reason)}` : ""}</span>
+  </label>`).join("");
+  trackPicker.hidden = false;
+  insertBackdrop.hidden = false;
+  return new Promise(resolve => {
+    const finish = chosen => {
+      trackPicker.hidden = true;
+      insertBackdrop.hidden = true;
+      document.querySelector("#track-picker-ok").onclick = null;
+      document.querySelector("#track-picker-cancel").onclick = null;
+      insertBackdrop.onclick = null;
+      resolve(chosen);
+    };
+    document.querySelector("#track-picker-ok").onclick = () => finish([...trackPickerList.querySelectorAll("input:checked")].map(input => Number(input.value)));
+    document.querySelector("#track-picker-cancel").onclick = () => finish(null);
+    insertBackdrop.onclick = () => finish(null);
+  });
+}
+
+// Guitar Pro → Markdown, never at the expense of what is already written:
+// the song goes in as blocks carrying their own settings, at the cursor
+// (`at: "cursor"`, the "+" menu) or as a new section at the end of the
+// document (`at: "end"`, Importer/Ouvrir). Only an empty editor gets a
+// whole new document with front matter. Warnings (ignored tracks, meter
+// changes) are written above the blocks.
+async function importGuitarPro(bytes, { at = "end", sourceName = "" } = {}) {
+  status.textContent = "Import Guitar Pro…";
+  try {
+    const { score, title, tracks } = await loadGuitarPro(bytes);
+    const chosen = await chooseTracks(title, tracks);
+    if (!chosen) {
+      status.textContent = "Import annulé";
+      return;
+    }
+    const empty = editor.value.trim() === "";
+    const { markdown, warnings } = guitarProMarkdown(score, { tracks: chosen, embed: !empty, sourceName });
+    if (empty) {
+      currentFilePath = null;
+      editor.value = markdown;
+    } else if (at === "cursor") {
+      const before = editor.selectionStart > 0 && editor.value[editor.selectionStart - 1] !== "\n" ? "\n\n" : "\n";
+      editor.setRangeText(`${before}${markdown}\n`, editor.selectionStart, editor.selectionEnd, "end");
+      editor.focus();
+    } else {
+      const heading = `## ${title || sourceName || "Guitar Pro"}`;
+      editor.value = `${editor.value.replace(/\s+$/, "")}\n\n${heading}\n\n${markdown}`;
+      editor.setSelectionRange(editor.value.length, editor.value.length);
+    }
+    update();
+    const verb = empty ? "importé" : at === "cursor" ? "inséré" : "ajouté";
+    status.textContent = warnings.length ? `Guitar Pro ${verb} (${warnings.length} remarque${warnings.length > 1 ? "s" : ""})` : `Guitar Pro ${verb}`;
+  } catch (error) {
+    status.textContent = "Fichier Guitar Pro illisible";
+    console.error("[import guitar pro]", error);
+  }
+}
+
+// "Guitar Pro" component: the file's tracks are inserted at the cursor
+// as blocks carrying their own tempo, meter, tuning and sound.
+document.querySelector("#insert-gp").addEventListener("change", async event => {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  setInsertMenu(false);
+  if (!file) return;
+  await importGuitarPro(new Uint8Array(await file.arrayBuffer()), { at: "cursor", sourceName: file.name });
+});
+
 document.querySelector("#import-file")?.addEventListener("change", async event => {
   const file = event.target.files?.[0];
   if (!file) return;
-  editor.value = await file.text();
   event.target.value = "";
+  if (isGuitarProFile(file.name)) {
+    await importGuitarPro(new Uint8Array(await file.arrayBuffer()), { sourceName: file.name });
+    return;
+  }
+  editor.value = await file.text();
   update();
 });
 

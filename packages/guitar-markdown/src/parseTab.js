@@ -1,29 +1,47 @@
 const DEFAULT_TUNING = ["e", "B", "G", "D", "A", "E"];
 const STRING_NUMBER_BY_LABEL = { e: 1, B: 2, G: 3, D: 4, A: 5, E: 6 };
 
+// Non-blank lines with their line number in the source, so a note can be
+// traced back to where it is written.
 function normalizeLines(source) {
   return source
     .split(/\r?\n/)
-    .map(line => line.replace(/\t/g, "  "))
-    .filter(line => line.trim().length > 0);
+    .map((text, line) => ({ text: text.replace(/\t/g, "  "), line }))
+    .filter(entry => entry.text.trim().length > 0);
 }
 
-function findStringLines(lines) {
+// A block holds one or more systems: groups of the six string lines, read
+// one after the other as consecutive bars (a long song wraps every few
+// bars for readability). A label seen again starts the next system.
+function findSystems(lines) {
   const candidates = lines
-    .map((line, sourceIndex) => {
-      const match = line.match(/^\s*([eEBGDA])\s*\|(.+)$/);
-      return match ? { label: match[1], body: match[2], sourceIndex } : null;
+    .map((entry, sourceIndex) => {
+      const match = entry.text.match(/^\s*([eEBGDA])\s*\|(.+)$/);
+      // `prefix`: characters before the music ("e|", spaces included).
+      return match ? { label: match[1], body: match[2], sourceIndex, line: entry.line, prefix: entry.text.length - match[2].length } : null;
     })
     .filter(Boolean);
-
-  if (candidates.length !== 6) {
+  if (!candidates.length) {
     throw new Error("Une tablature doit contenir exactement 6 lignes de cordes (e, B, G, D, A, E).");
   }
-  const labels = new Set(candidates.map(candidate => candidate.label));
-  if (labels.size !== 6) {
-    throw new Error("Chaque corde (e, B, G, D, A, E) doit apparaître exactement une fois dans la tablature.");
+  const systems = [];
+  let current = [];
+  for (const candidate of candidates) {
+    if (current.some(line => line.label === candidate.label)) {
+      systems.push(current);
+      current = [];
+    }
+    current.push(candidate);
   }
-  return candidates;
+  systems.push(current);
+  for (const system of systems) {
+    if (system.length !== 6) {
+      throw new Error(systems.length > 1
+        ? "Chaque groupe de lignes d'une tablature doit contenir les 6 cordes (e, B, G, D, A, E)."
+        : "Une tablature doit contenir exactement 6 lignes de cordes (e, B, G, D, A, E).");
+    }
+  }
+  return systems;
 }
 
 function splitMeasures(body) {
@@ -108,7 +126,7 @@ function parseTimeSignature(timeSignature) {
   return { beatsPerMeasure: Number(match[1]), beatUnit: Number(match[2]) };
 }
 
-function parseMeasure(segments, measureIndex, chord = "", timeSignature = "4/4") {
+function parseMeasure(segments, measureIndex, chord = "", timeSignature = "4/4", sources = {}) {
   const width = Math.max(...segments.map(({ segment }) => segment.length), 1);
   const { beatsPerMeasure, beatUnit } = parseTimeSignature(timeSignature);
   const totalSixteenths = beatsPerMeasure * (16 / beatUnit);
@@ -131,7 +149,7 @@ function parseMeasure(segments, measureIndex, chord = "", timeSignature = "4/4")
         endColumn: column + token.length,
       };
       notes.push(note);
-      const position = { string: stringNumber, fret: token.value };
+      const position = { string: stringNumber, fret: token.value, column, length: token.length };
       if (token.ghost) position.ghost = true;
       if (token.harmonic) position.harmonic = true;
       if (!eventMap.has(column)) eventMap.set(column, []);
@@ -171,15 +189,16 @@ function parseMeasure(segments, measureIndex, chord = "", timeSignature = "4/4")
     });
   }
 
-  return { index: measureIndex, chord, width, events, techniques, ornaments };
+  // `sources[string]` = { line, column }: where this bar starts on that
+  // string's line of the source (line: 0-based in the block, column: 0-based).
+  return { index: measureIndex, chord, width, events, techniques, ornaments, sources };
 }
 
-export function parseAsciiTab(source, options = {}) {
-  const timeSignature = options.timeSignature ?? "4/4";
-  const lines = normalizeLines(source);
-  const stringLines = findStringLines(lines);
+// One system: its bars, with the chord names read from the line above it.
+function parseSystem(lines, stringLines, timeSignature, firstMeasureIndex) {
   const firstStringLineIndex = Math.min(...stringLines.map(line => line.sourceIndex));
-  const chordLine = lines[firstStringLineIndex - 1] ?? "";
+  const above = lines[firstStringLineIndex - 1]?.text ?? "";
+  const chordLine = /^\s*[eEBGDA]\s*\|/.test(above) ? "" : above;
   const splitByString = stringLines.map(line => ({ ...line, measures: splitMeasures(line.body) }));
   const measureCount = Math.max(...splitByString.map(line => line.measures.length));
 
@@ -193,13 +212,28 @@ export function parseAsciiTab(source, options = {}) {
     return label;
   });
 
-  const measures = Array.from({ length: measureCount }, (_, measureIndex) => {
+  return Array.from({ length: measureCount }, (_, index) => {
     const segments = splitByString.map(line => ({
       label: line.label,
-      segment: line.measures[measureIndex] ?? "",
+      segment: line.measures[index] ?? "",
     }));
-    return parseMeasure(segments, measureIndex, chordLabels[measureIndex], timeSignature);
+    const sources = {};
+    for (const line of splitByString) {
+      const string = STRING_NUMBER_BY_LABEL[line.label] ?? STRING_NUMBER_BY_LABEL[line.label.toUpperCase()];
+      const before = line.measures.slice(0, index).reduce((total, segment) => total + segment.length + 1, 0);
+      sources[string] = { line: line.line, column: line.prefix + before };
+    }
+    return parseMeasure(segments, firstMeasureIndex + index, chordLabels[index], timeSignature, sources);
   });
+}
+
+export function parseAsciiTab(source, options = {}) {
+  const timeSignature = options.timeSignature ?? "4/4";
+  const lines = normalizeLines(source);
+  const measures = [];
+  for (const system of findSystems(lines)) {
+    measures.push(...parseSystem(lines, system, timeSignature, measures.length));
+  }
 
   return {
     type: "tablature",

@@ -244,8 +244,13 @@ function analyseMeasure(measure) {
   return { folded, foldedInto, heldThrough, noteEffects, beatEffects };
 }
 
+// Frets beyond any guitar neck (two frets run together in the ASCII, such
+// as "1012") would make alphaTab lay out a note far above the staff and
+// crash the renderer: write them as dead notes instead.
+const MAX_FRET = 30;
+
 function noteToken(position, effects) {
-  if (position.fret === "x") return `x.${position.string}`;
+  if (position.fret === "x" || Number(position.fret) > MAX_FRET) return `x.${position.string}`;
   return `${position.fret}.${position.string}${effects.length ? `{${effects.join(" ")}}` : ""}`;
 }
 

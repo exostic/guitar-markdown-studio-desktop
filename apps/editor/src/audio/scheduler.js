@@ -33,7 +33,22 @@ export function createTransport() {
   let timer = null;
   let frame = null;
   let playing = false;
+  let paused = false;
   let current = null;
+
+  // Pausing suspends the AudioContext: its clock stops, so every scheduled
+  // note and cue stays exactly where it was until resume.
+  function pause() {
+    if (!playing || paused) return;
+    paused = true;
+    getAudioContext().suspend();
+  }
+
+  function resume() {
+    if (!paused) return;
+    paused = false;
+    getAudioContext().resume();
+  }
 
   function stop() {
     if (timer) clearInterval(timer);
@@ -43,6 +58,10 @@ export function createTransport() {
     playing = false;
     current = null;
     stopAllVoices();
+    if (paused) {
+      paused = false;
+      getAudioContext().resume();
+    }
   }
 
   function play({ events, bpm, totalBeats, loop = false, onCue, onEnd, id = null }) {
@@ -105,7 +124,10 @@ export function createTransport() {
   return {
     play,
     stop,
+    pause,
+    resume,
     isPlaying: () => playing,
+    isPaused: () => paused,
     currentId: () => current,
   };
 }

@@ -2,7 +2,7 @@
 // listener handles play buttons, the tempo pill (metronome), tuner strings
 // and single chord diagrams; cues from the scheduler drive `.playing`
 // highlights on measures, diagrams, grid cells and strokes.
-import { alphaTabBeatElements, alphaTabEventAtPoint } from "../alphatab.js";
+import { alphaTabBarHighlight, alphaTabBeatElements, alphaTabEventAtPoint } from "../alphatab.js";
 import { chordsBlockToEvents, gridToEvents, shapeToEvents } from "./chordEvents.js";
 import { ensureRunning, pluck, setSound } from "./engine.js";
 import { rhythmToEvents } from "./rhythmEvents.js";
@@ -68,7 +68,8 @@ function showCursor() {
 export function stopAll() {
   transport.stop();
   clearHighlight();
-  activeButton?.classList.remove("active");
+  activeButton?.classList.remove("active", "paused");
+  if (activeButton?.classList.contains("play-button")) activeButton.textContent = PLAY_LABEL;
   activeButton = null;
   previewEl?.querySelectorAll(".playing").forEach(element => element.classList.remove("playing"));
   showCursor();
@@ -81,14 +82,30 @@ export function isPlaying() {
 function cueTarget(entry, cue) {
   const host = document.getElementById(entry.id);
   if (!host) return null;
-  if (entry.type === "tab" || entry.type === "partition") return alphaTabBeatElements(entry.id, cue.measure, cue.event);
+  if (entry.type === "tab" || entry.type === "partition") {
+    // The bar box under the note, the note's glyphs on top.
+    return [alphaTabBarHighlight(entry.id, cue.measure), ...alphaTabBeatElements(entry.id, cue.measure, cue.event)];
+  }
   if (entry.type === "chords") return host.children[cue.item] ?? null;
   if (entry.type === "grid") return host.querySelector(`[data-cell="${cue.row}-${cue.cell}"]`);
   if (entry.type === "rhythm") return host.querySelector(`[data-stroke="${cue.group}-${cue.stroke}"]`);
   return null;
 }
 
-function buildEvents(entry, settings) {
+// A notation block may carry its own tempo, meter, tuning and capo.
+function blockSettings(entry, settings) {
+  if (entry.type !== "tab" && entry.type !== "partition") return settings;
+  return {
+    ...settings,
+    bpm: entry.tempo ?? settings.bpm,
+    timeSignature: entry.timeSignature ?? settings.timeSignature,
+    tuning: entry.tuning ?? settings.tuning,
+    capo: entry.capo ?? settings.capo,
+  };
+}
+
+function buildEvents(entry, docSettings) {
+  const settings = blockSettings(entry, docSettings);
   const measureBeats = measureBeatsFor(settings.timeSignature);
   const common = { tuning: settings.tuning, capo: settings.capo };
   if (entry.type === "tab" || entry.type === "partition") {
@@ -120,11 +137,15 @@ async function startBlock(button, entry, settings) {
   stopAll();
   const started = transport.play({
     events,
-    bpm: settings.bpm * getSpeed(entry.id),
+    bpm: blockSettings(entry, settings).bpm * getSpeed(entry.id),
     totalBeats,
     loop: built.loop,
     id: entry.id,
-    onCue: cue => setHighlight(cueTarget(entry, cue)),
+    onCue: cue => {
+      const target = cueTarget(entry, cue);
+      setHighlight(target);
+      onPlaying?.(entry, cue, (Array.isArray(target) ? target : [target]).filter(Boolean));
+    },
     onEnd: () => {
       if (cursor?.id === entry.id) cursor = null;
       stopAll();
@@ -132,11 +153,49 @@ async function startBlock(button, entry, settings) {
   });
   if (!started) return;
   activeButton = button;
+  lastStarted = { button, entry };
   button.classList.add("active");
 }
 
+// Space: pause or resume what plays; with nothing playing, start the last
+// block played (or the one holding the cursor) again. Returns false when
+// there was nothing to do, so the key can keep its normal meaning.
+export function togglePlayPause() {
+  if (transport.isPlaying() && activeButton?.classList.contains("play-button")) {
+    if (transport.isPaused()) {
+      transport.resume();
+      activeButton.classList.remove("paused");
+      activeButton.textContent = PLAY_LABEL;
+    } else {
+      transport.pause();
+      activeButton.classList.add("paused");
+      activeButton.textContent = PAUSED_LABEL;
+    }
+    return true;
+  }
+  const target = lastStarted && document.body.contains(lastStarted.button) ? lastStarted : null;
+  const cursorEntry = cursor ? registry.get(cursor.id) : null;
+  const cursorButton = cursorEntry ? previewEl?.querySelector(`.play-button[data-target="${cursor.id}"]`) : null;
+  const pick = cursorButton ? { button: cursorButton, entry: cursorEntry } : target;
+  if (!pick || !registry.has(pick.entry.id)) return false;
+  startBlock(pick.button, registry.get(pick.entry.id), getSettingsRef());
+  return true;
+}
+
+let getSettingsRef = () => ({});
+
 // A click on a note: play that column alone, and leave the cursor on it.
+let onColumn = null;
+// Told about every cue as it plays, with the elements lit up (the editor
+// and the preview follow along).
+let onPlaying = null;
+// The block last started with ▶, so Space can start it again.
+let lastStarted = null;
+const PLAY_LABEL = "▶ Écouter";
+const PAUSED_LABEL = "❚❚ En pause";
+
 async function playColumn(entry, { measure, event: eventIndex }, settings) {
+  onColumn?.(entry, measure, eventIndex);
   const built = buildEvents(entry, settings);
   const cueEvent = built?.events.find(e => e.kind === "cue" && e.cue.measure === measure && e.cue.event === eventIndex);
   if (!cueEvent) return;
@@ -150,7 +209,7 @@ async function playColumn(entry, { measure, event: eventIndex }, settings) {
   stopAll();
   transport.play({
     events: [{ beat: 0, kind: "cue", cue: cueEvent.cue }, ...notes],
-    bpm: settings.bpm * getSpeed(entry.id),
+    bpm: blockSettings(entry, settings).bpm * getSpeed(entry.id),
     totalBeats: 2,
     loop: false,
     id: `${entry.id}:column`,
@@ -185,8 +244,13 @@ async function strumDiagram(item, settings) {
   setHighlight(item);
 }
 
-export function bindPlayback({ preview, getSettings }) {
+// `onColumn(entry, measureIndex, eventIndex)` is told about every note
+// clicked in a notation block (the editor moves its cursor there).
+export function bindPlayback({ preview, getSettings, onColumn: columnHandler = null, onPlaying: playingHandler = null }) {
   previewEl = preview;
+  onColumn = columnHandler;
+  onPlaying = playingHandler;
+  getSettingsRef = getSettings;
   preview.addEventListener("change", async event => {
     const select = event.target.closest(".play-speed");
     if (!select) return;

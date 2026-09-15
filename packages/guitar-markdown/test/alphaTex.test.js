@@ -171,3 +171,14 @@ E|------------|--------|----------------|----------------|`);
   const staff = score(tex).tracks[0].staves[0];
   assert.equal(staff.bars[3].voices[0].beats.length, 5);
 });
+
+test("toAlphaTex : une frette impossible devient une note étouffée au lieu de faire planter le rendu", () => {
+  const ast = tab(`e|1012----5-------|
+B|----------------|
+G|----------------|
+D|----------------|
+A|----------------|
+E|----------------|`);
+  const staff = score(toAlphaTex(ast)).tracks[0].staves[0];
+  assert.equal(describe(staff.bars[0]), "x/1:2 5/1:2");
+});

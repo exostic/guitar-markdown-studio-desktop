@@ -42,8 +42,8 @@ E|-------------------------------------------------------|`);
     [["bend", 5], ["bend-release", 7], ["bend", 8], ["vibrato", 11]],
   );
   const frets = measure.events.map(event => event.positions[0]);
-  assert.deepEqual(frets[12], { string: 1, fret: "5", ghost: true });
-  assert.deepEqual(frets[13], { string: 1, fret: "12", harmonic: true });
+  assert.deepEqual(frets[12], { string: 1, fret: "5", ghost: true, column: 44, length: 3 });
+  assert.deepEqual(frets[13], { string: 1, fret: "12", harmonic: true, column: 48, length: 4 });
 });
 
 test("le vibrato en fin de mesure est conservé", () => {
@@ -54,4 +54,55 @@ D|-------|
 A|-------|
 E|-------|`);
   assert.deepEqual(ast.measures[0].ornaments, [{ type: "vibrato", string: 1, event: 0 }]);
+});
+
+test("plusieurs groupes de 6 lignes dans un bloc = mesures qui se suivent", () => {
+  const ast = parseAsciiTab(`  C    G
+e|0---|3---|
+B|1---|0---|
+G|0---|0---|
+D|2---|0---|
+A|3---|2---|
+E|----|3---|
+
+  Am
+e|0---|
+B|1---|
+G|2---|
+D|2---|
+A|0---|
+E|----|`);
+  assert.equal(ast.measures.length, 3);
+  assert.deepEqual(ast.measures.map(m => m.index), [0, 1, 2]);
+  assert.deepEqual(ast.measures.map(m => m.chord), ["C", "G", "Am"]);
+  assert.deepEqual(ast.measures[2].events[0].positions.map(p => `${p.string}:${p.fret}`), ["1:0", "2:1", "3:2", "4:2", "5:0"]);
+  assert.throws(() => parseAsciiTab(`e|0---|\nB|1---|\nG|0---|\nD|2---|\nA|3---|\nE|----|\ne|0---|\nB|1---|`), /6 cordes/);
+});
+
+test("chaque mesure et chaque note connaissent leur place dans la source", () => {
+  const source = `sound: clean
+
+  C    G
+e|0---|3---|
+B|1---|0---|
+G|0---|0---|
+D|2---|0---|
+A|3---|2---|
+E|----|3---|
+
+e|--12-|
+B|-----|
+G|-----|
+D|-----|
+A|-----|
+E|-----|`;
+  const ast = parseAsciiTab(source);
+  const lines = source.split("\n");
+  assert.deepEqual(ast.measures[1].sources[1], { line: 3, column: 7 }, "2e mesure sur la ligne e| : après « e|0---| »");
+  assert.deepEqual(ast.measures[1].sources[6], { line: 8, column: 7 });
+  assert.deepEqual(ast.measures[2].sources[1], { line: 10, column: 2 });
+  const note = ast.measures[2].events[0].positions[0];
+  assert.deepEqual([note.column, note.length], [2, 2]);
+  const at = ast.measures[2].sources[note.string];
+  assert.equal(lines[at.line].slice(at.column + note.column, at.column + note.column + note.length), "12");
 });
