@@ -13,7 +13,7 @@ import { parseSound } from "./audio/sound.js";
 import { setSampler } from "./audio/engine.js";
 import { destroyAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPro, onAlphaTabRendered, renderAlphaTabBlock } from "./alphatab.js";
 import { parseStaff } from "./blockOptions.js";
-import { downloadFile, getAccessToken, getDriveConfig, isSignedIn, listMarkdownFiles, setDriveConfig, shareFile, shareWithAnyone, signOut as driveSignOut, uploadFile } from "./drive.js";
+import { downloadFile, getDriveConfig, listMarkdownFiles, setDriveConfig, shareFile, signOut as driveSignOut, uploadFile } from "./drive.js";
 import { shortenUrl } from "./shortlink.js";
 import LZString from "lz-string";
 
@@ -56,8 +56,6 @@ let currentFilePath = null;
 // hold. Deliberately not cleared on further local edits; the QR staying
 // slightly stale is a better trade-off than it disappearing entirely.
 let currentSrcUrl = null;
-// Drive file id the document was opened from (a course shared by link).
-let currentDriveId = null;
 let fitToPage = false;
 let webMode = false;
 let viewOnly = false;
@@ -106,15 +104,6 @@ app.innerHTML = `
   <section class="workspace">
     <button id="edit-toggle" class="edit-toggle" type="button" hidden>✎ Éditer</button>
     <div class="insert-backdrop" id="insert-backdrop" hidden></div>
-    <div class="track-picker drive-settings" id="drive-open" role="dialog" aria-modal="true" hidden>
-      <div class="insert-menu-heading">Google Drive</div>
-      <h2 class="track-picker-title">Cours partagé depuis Google Drive</h2>
-      <p class="drive-help">Ce cours est partagé depuis le Google Drive de son auteur. Connecte-toi avec ton compte Google pour l'ouvrir : l'application ne demande que l'accès à ses propres fichiers.</p>
-      <div class="track-picker-actions">
-        <button type="button" id="drive-open-cancel">Plus tard</button>
-        <button type="button" id="drive-open-ok" class="primary">Ouvrir avec Google</button>
-      </div>
-    </div>
     <div class="track-picker drive-picker" id="drive-picker" role="dialog" aria-modal="true" hidden>
       <div class="insert-menu-heading">Google Drive</div>
       <h2 class="track-picker-title">Ouvrir un cours</h2>
@@ -339,7 +328,7 @@ async function driveSave({ saveAs = false } = {}) {
   }
   status.textContent = "Enregistrement sur Drive…";
   const saved = await uploadFile({ id: target.id, name: target.name, content: editor.value });
-  driveFile = { id: saved.id, name: saved.name ?? target.name, public: driveFile?.id === saved.id ? driveFile.public : false };
+  driveFile = { id: saved.id, name: saved.name ?? target.name };
   status.textContent = `Enregistré sur Drive · ${driveFile.name}`;
 }
 
@@ -1413,7 +1402,6 @@ function buildHeaderQrUrl() {
   // a QR code can encode (a few KB at most) for any real lesson.
   const params = new URLSearchParams();
   if (currentSrcUrl) params.set("src", currentSrcUrl);
-  else if (currentDriveId) params.set("drive", currentDriveId);
   else params.set("doc", toBase64(editor.value));
   params.set("mode", "web");
   params.set("view", "only");
@@ -1421,54 +1409,16 @@ function buildHeaderQrUrl() {
   return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 }
 
-// Signed in to Google: the course is saved on Drive (created under the
-// suggested name the first time, updated afterwards), opened to anyone
-// with the link, and the link opens it in the app by its Drive id, so it
-// stays short and follows later saves. Resolves to the link, or null when
-// the person cancelled the save.
-async function driveShareLink() {
-  await getAccessToken();
-  if (!driveFile) {
-    await driveSave();
-    if (!driveFile) return null;
-  } else {
-    await driveSave();
-  }
-  if (!driveFile.public) {
-    status.textContent = "Partage du fichier Drive…";
-    await shareWithAnyone(driveFile.id);
-    driveFile.public = true;
-  }
-  const params = new URLSearchParams({ drive: driveFile.id, mode: "web", view: "only", edit: "hide" });
-  return `${window.location.origin}${window.location.pathname}?${params}`;
-}
-
-// The share link: through Drive when Google is connected, otherwise a
-// short alias of the self-contained link when TinyURL answers, the full
-// link failing that. Resolves to { url, short, drive }, or null when the
-// person cancelled.
+// The share link, as a short alias when TinyURL answers, the full link
+// otherwise. Resolves to { url, short }.
 async function shareLink() {
-  if (isSignedIn()) {
-    try {
-      const url = await driveShareLink();
-      return url ? { url, short: true, drive: true } : null;
-    } catch (error) {
-      console.warn("[share] partage par Drive impossible, lien autonome utilisé", error);
-      status.textContent = error.message;
-    }
-  }
   const full = buildShareUrl("web");
   try {
-    return { url: await shortenUrl(full), short: true, drive: false };
+    return { url: await shortenUrl(full), short: true };
   } catch (error) {
     console.warn("[share] lien court impossible, lien complet utilisé", error);
-    return { url: full, short: false, drive: false };
+    return { url: full, short: false };
   }
-}
-
-function linkStatus(link, done) {
-  if (link.drive) return `${done} (lien Google Drive)`;
-  return link.short ? `${done} (lien court)` : `${done} (lien court indisponible)`;
 }
 
 shareButton.addEventListener("click", async () => {
@@ -1476,23 +1426,21 @@ shareButton.addEventListener("click", async () => {
   // that's the format meant for sharing with a student.
   status.textContent = "Préparation du lien…";
   const pending = shareLink();
-  const cancelled = () => { status.textContent = "Partage annulé"; };
   // Safari only writes to the clipboard within the click: a ClipboardItem
   // fed by a promise keeps the gesture while the alias is being made.
   if (navigator.clipboard?.write && typeof ClipboardItem === "function" && ClipboardItem.supports?.("text/plain") !== false) {
     try {
-      await navigator.clipboard.write([new ClipboardItem({ "text/plain": pending.then(link => { if (!link) throw new Error("annulé"); return new Blob([link.url], { type: "text/plain" }); }) })]);
-      status.textContent = linkStatus(await pending, "Lien copié");
+      await navigator.clipboard.write([new ClipboardItem({ "text/plain": pending.then(link => new Blob([link.url], { type: "text/plain" })) })]);
+      const { short } = await pending;
+      status.textContent = short ? "Lien court copié" : "Lien copié (lien court indisponible)";
       return;
     } catch (error) {
-      if (!(await pending)) return cancelled();
       console.warn("[share] ClipboardItem impossible, copie classique", error);
     }
   }
-  const link = await pending;
-  if (!link) return cancelled();
-  const copied = await copyToClipboard(link.url);
-  status.textContent = copied ? linkStatus(link, "Lien copié") : "Erreur de copie";
+  const { url, short } = await pending;
+  const copied = await copyToClipboard(url);
+  status.textContent = copied ? (short ? "Lien court copié" : "Lien copié (lien court indisponible)") : "Erreur de copie";
 });
 
 // "Envoyer par e-mail…": the mail client opens (new tab on the web) on a
@@ -1509,7 +1457,7 @@ function mailtoFits(mailto) {
   return encodeURIComponent(mailto).length < MAILTO_LIMIT;
 }
 
-function emailMessage(link, { drive = false } = {}) {
+function emailMessage(link) {
   const { data } = parseFrontMatter(editor.value);
   const title = data.title || "Cours de guitare";
   const subject = `🎸 Cours de guitare : ${title}`;
@@ -1518,7 +1466,7 @@ function emailMessage(link, { drive = false } = {}) {
   const outro = ["", "Bonne musique ! 🎸", ""];
   // The link alone on its line: a mailto body is plain text, mail clients
   // turn a bare URL into a link when they display the message.
-  const withLink = [...intro, drive ? "Ouvre-le ici (une connexion à ton compte Google te sera demandée, le cours est partagé depuis mon Drive) :" : "Ouvre-le ici, il s'affiche directement :", "", link, "", features, ...outro];
+  const withLink = [...intro, "Ouvre-le ici, il s'affiche directement :", "", link, "", features, ...outro];
   const paste = [
     ...intro,
     `Pour le lire, l'écouter et l'imprimer : ouvre https://gms.exostic.com, efface l'exemple (la corbeille du panneau Markdown) et colle le texte qui suit le trait ci-dessous. ${features}`,
@@ -1531,15 +1479,11 @@ function emailMessage(link, { drive = false } = {}) {
 
 async function shareByEmail() {
   status.textContent = "Préparation du lien…";
-  const link = await shareLink();
-  if (!link) {
-    status.textContent = "Partage annulé";
-    return;
-  }
-  const message = emailMessage(link.url, { drive: link.drive });
+  const { url: link, short } = await shareLink();
+  const message = emailMessage(link);
   const mailtoFor = body => `mailto:?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(body)}`;
   let mailto = mailtoFor(message.withLink);
-  let note = linkStatus(link, "Message prêt dans ta messagerie");
+  let note = short ? "Message prêt dans ta messagerie, avec le lien du cours" : "Message prêt dans ta messagerie, avec le lien complet du cours";
   if (!mailtoFits(mailto)) {
     const copied = await copyToClipboard(editor.value);
     if (!copied) throw new Error("Lien court indisponible, cours trop long pour un e-mail et copie impossible : partage-le par Drive.");
@@ -1871,7 +1815,6 @@ async function loadFromQueryParams() {
   const doc = params.get("doc");
   const b64 = params.get("b64");
   const src = params.get("src");
-  const driveId = params.get("drive");
   const requestedMode = VIEW_MODE_PARAM[params.get("mode")] ?? "web";
   viewOnly = params.get("view") === "only";
   hideEditButton = params.get("edit") === "hide";
@@ -1902,39 +1845,8 @@ async function loadFromQueryParams() {
       status.textContent = "Erreur de chargement";
       console.error("Impossible de charger le document distant :", error);
     }
-  } else if (driveId) {
-    setViewMode(requestedMode);
-    await openSharedDriveFile(driveId);
-    return;
   }
   setViewMode(requestedMode);
-}
-
-// A course shared by its Drive id: Google must be asked from a click (the
-// sign-in opens a popup), so a dialog explains and offers to open it.
-async function openSharedDriveFile(id) {
-  const dialog = document.querySelector("#drive-open");
-  showModal(dialog);
-  const accepted = await new Promise(resolve => {
-    document.querySelector("#drive-open-ok").onclick = () => resolve(true);
-    document.querySelector("#drive-open-cancel").onclick = () => resolve(false);
-    insertBackdrop.onclick = () => resolve(false);
-  });
-  hideModal(dialog);
-  if (!accepted) {
-    status.textContent = "Cours non ouvert : recharge la page pour réessayer";
-    return;
-  }
-  try {
-    status.textContent = "Ouverture depuis Google Drive…";
-    editor.value = await downloadFile(id);
-    currentDriveId = id;
-    update();
-    status.textContent = "";
-  } catch (error) {
-    status.textContent = `Impossible d'ouvrir ce cours (${error.message}). Ouvre-le dans Drive : https://drive.google.com/file/d/${id}/view`;
-    console.error("[drive] ouverture du cours partagé :", error);
-  }
 }
 
 loadFromQueryParams();

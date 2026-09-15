@@ -93,12 +93,6 @@ export async function getAccessToken() {
   return token.accessToken;
 }
 
-// Signed in earlier and not signed out since (the token may have expired,
-// Google renews it without a new consent).
-export function isSignedIn() {
-  return Boolean(token?.accessToken);
-}
-
 export function signOut() {
   if (token?.accessToken && window.google?.accounts?.oauth2?.revoke) window.google.accounts.oauth2.revoke(token.accessToken, () => {});
   token = null;
@@ -160,17 +154,6 @@ export async function shareFile(id, { email, role = "reader", message = "" }) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ type: "user", role, emailAddress: email }),
-  });
-  return response.json();
-}
-
-// Anyone with the link may read the file; Drive's own "share with
-// everyone" setting, made from the app for a file it created.
-export async function shareWithAnyone(id) {
-  const response = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(id)}/permissions?fields=id,type,role`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "anyone", role: "reader" }),
   });
   return response.json();
 }
