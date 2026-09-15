@@ -266,20 +266,17 @@ async function strumGridCell(cell, settings) {
   setHighlight(cell);
 }
 
-// A click on the circle of fifths: strum the chord of that sector (major
-// ring or minor ring), lighting the sector meanwhile.
-async function strumCircleChord(element, settings) {
-  const name = element.dataset.chord;
-  const svg = element.closest(".circle-of-fifths");
-  if (!name || !svg) return;
-  const sector = svg.querySelector(`path[data-chord="${CSS.escape(name)}"]`) ?? element;
+// Strum a chord by name (a sector of the circle of fifths, a chord written
+// above a lyric), lighting `element` meanwhile.
+async function strumNamedChord(name, element, settings) {
+  if (!name) return;
   const measureBeats = measureBeatsFor(settings.timeSignature);
   const { events, totalBeats } = gridToEvents({ rows: [{ cells: [name] }] }, { measureBeats, semitones: 0, capo: settings.capo });
   await ensureRunning();
   setSound(settings.sound);
   stopAll();
-  transport.play({ events, bpm: settings.bpm, totalBeats, loop: false, id: `circle:${name}`, onEnd: () => stopAll() });
-  setHighlight(sector);
+  transport.play({ events, bpm: settings.bpm, totalBeats, loop: false, id: `chord:${name}`, onEnd: () => stopAll() });
+  setHighlight(element);
 }
 
 // A click on a note of a scale diagram: pluck that fret on that string, in
@@ -363,7 +360,13 @@ export function bindPlayback({ preview, getSettings, onColumn: columnHandler = n
     const cell = event.target.closest(".grid-cell");
     if (cell && preview.classList.contains("web-mode")) await strumGridCell(cell, getSettings());
     const sector = event.target.closest(".circle-of-fifths [data-chord]");
-    if (sector && preview.classList.contains("web-mode")) await strumCircleChord(sector, getSettings());
+    if (sector && preview.classList.contains("web-mode")) {
+      // A label click lights the sector of the same chord.
+      const path = sector.closest(".circle-of-fifths").querySelector(`path[data-chord="${CSS.escape(sector.dataset.chord)}"]`) ?? sector;
+      await strumNamedChord(sector.dataset.chord, path, getSettings());
+    }
+    const lyricChord = event.target.closest(".inline-chord");
+    if (lyricChord && preview.classList.contains("web-mode")) await strumNamedChord(lyricChord.dataset.chord, lyricChord, getSettings());
     const scaleNote = event.target.closest(".fretboard-host .fret-note");
     if (scaleNote && preview.classList.contains("web-mode")) await pluckScaleNote(scaleNote, getSettings());
     const host = event.target.closest(".alphatab-host");

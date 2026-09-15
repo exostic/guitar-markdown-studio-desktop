@@ -1241,6 +1241,13 @@ button:focus-visible,
   line-height: 1;
   vertical-align: baseline;
 }
+.course-page.web-mode:not(.export-static) .inline-chord::before {
+  cursor: pointer;
+}
+.inline-chord.playing::before {
+  background: var(--doc-primary);
+  color: #fff;
+}
 .inline-chord::before {
   content: attr(data-chord);
   position: absolute;
