@@ -204,6 +204,19 @@ En mode Web, six boutons jouent chaque corde à vide, et **🎤 Accorder au micr
 
 En mode Web, six boutons jouent la note de chaque corde à vide. En mode Livre/Poster (et dans l'export HTML), un tableau corde / note / fréquence. Sans ligne `tuning:`, l'accordage du front matter est utilisé.
 
+## Pages légales
+
+Les règles de confidentialité et les conditions d'utilisation sont servies à `/confidentialite/` et `/conditions/` (dossiers `apps/editor/public/confidentialite/` et `conditions/`) et liées depuis l'en-tête de l'application. Ce sont les adresses à indiquer dans l'écran de consentement OAuth de Google.
+
+## Google Drive
+
+Le menu **Drive ▾** ouvre un cours depuis Google Drive, l'enregistre (sur le même fichier) ou l'enregistre sous un autre nom. Tout se passe côté client, avec OAuth seulement : il n'y a ni clé API ni secret dans l'application, seulement l'identifiant client OAuth, qui est public et déjà renseigné. Pour utiliser un autre projet Google, saisissez son identifiant dans **Réglages Google…** :
+
+1. Dans la [console Google Cloud](https://console.cloud.google.com/apis/credentials), créez un projet, activez l'**API Google Drive**, et configurez l'écran de consentement OAuth (type externe, en mode test, avec votre adresse Google comme testeur).
+2. Créez un identifiant OAuth de type **Application Web** avec, en origine JavaScript autorisée, l'adresse du site (et `http://localhost:5173` pour le développement), et en URI de redirection autorisée `http://localhost:43110/` pour l'application de bureau. Copiez l'identifiant client dans les réglages.
+
+Sur le web, la connexion passe par la fenêtre Google dans la page ; dans l'application de bureau, par le navigateur du système, qui renvoie le jeton à l'application sur `localhost:43110`. Le jeton vaut une heure et n'est gardé qu'en mémoire ; l'application demande l'accès complet au Drive (portée `drive`), nécessaire pour lister vos fichiers Markdown et enregistrer sur un fichier existant. L'identifiant peut aussi être fourni au build par `VITE_GOOGLE_CLIENT_ID`.
+
 ## Importer un fichier Guitar Pro
 
 Le bouton **Importer** (ou **Ouvrir** sur le bureau) accepte aussi un fichier Guitar Pro (`.gp3`, `.gp4`, `.gp5`, `.gpx`, `.gp`). Le fichier est lu par alphaTab puis traduit et **ajouté en fin de document**, sous un titre au nom du morceau, sans toucher à ce qui est déjà écrit : chaque piste à six cordes devient un bloc `tab` avec `staff: tab et partition`, les mesures réparties sur des lignes d'au plus quatre mesures et une centaine de caractères, et ses propres lignes `tempo:`, `time:`, `tuning:`, `capo:` et `sound:`, pour se jouer et se graver comme dans le fichier. Un éditeur vide reçoit à la place un document complet, avec le front matter tiré du fichier.

@@ -11,7 +11,7 @@
     "dev": "npm run dev --workspace @gms/editor",
     "build": "npm run build --workspace @gms/editor",
     "preview": "npm run preview --workspace @gms/editor",
-    "test": "node --test packages/*/test/*.test.js apps/editor/src/*.test.js apps/editor/src/audio/*.test.js",
+    "test": "node --test packages/*/test/*.test.js apps/editor/src/*.test.js apps/editor/src/audio/*.test.js electron/*.test.cjs",
     "export:pdf": "node packages/exporter-pdf/src/cli.js",
     "desktop:dev": "concurrently -k \"npm run dev -- --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env GMS_DEV_SERVER_URL=http://127.0.0.1:5173 electron electron/main.cjs\"",
     "desktop:start": "npm run build && electron electron/main.cjs",

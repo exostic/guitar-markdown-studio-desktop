@@ -13,6 +13,7 @@ import { parseSound } from "./audio/sound.js";
 import { setSampler } from "./audio/engine.js";
 import { destroyAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPro, onAlphaTabRendered, renderAlphaTabBlock } from "./alphatab.js";
 import { parseStaff } from "./blockOptions.js";
+import { downloadFile, getDriveConfig, listMarkdownFiles, setDriveConfig, signOut as driveSignOut, uploadFile } from "./drive.js";
 import LZString from "lz-string";
 
 const { compressToEncodedURIComponent, decompressFromEncodedURIComponent } = LZString;
@@ -68,7 +69,7 @@ app.innerHTML = `
   <header class="topbar">
     <div class="brand">
       <img class="brand-mark" src="${brandMarkUrl}" alt="" width="34" height="34" />
-      <div><h1>Guitar Markdown Studio</h1><p>Markdown → AST → alphaTab / SVGuitar · <a class="brand-link" href="llms.txt" target="_blank" rel="noopener" title="Référence de la syntaxe, lisible par les agents IA">Doc / agents IA</a></p></div>
+      <div><h1>Guitar Markdown Studio</h1><p>Markdown → AST → alphaTab / SVGuitar · <a class="brand-link" href="llms.txt" target="_blank" rel="noopener" title="Référence de la syntaxe, lisible par les agents IA">Doc / agents IA</a> · <a class="brand-link" href="confidentialite/" target="_blank" rel="noopener">Confidentialité</a> · <a class="brand-link" href="conditions/" target="_blank" rel="noopener">Conditions</a></p></div>
     </div>
     <div class="actions">
       <span id="status">Prêt</span>
@@ -76,6 +77,17 @@ app.innerHTML = `
         <button id="open-md">Ouvrir</button>
         <label class="button browser-import" title="Ouvrir un cours Markdown ou importer un fichier Guitar Pro">Importer<input id="import-file" type="file" accept=".md,.markdown,.gp,.gp3,.gp4,.gp5,.gpx" hidden></label>
         <button id="download-md">Enregistrer .md</button>
+        <span class="drive-menu-wrap">
+          <button id="drive-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="Google Drive">Drive ▾</button>
+          <div class="drive-menu" id="drive-menu" role="menu" hidden>
+            <button type="button" data-drive="open">Ouvrir depuis Drive…</button>
+            <button type="button" data-drive="save">Enregistrer sur Drive</button>
+            <button type="button" data-drive="save-as">Enregistrer sous… (Drive)</button>
+            <hr>
+            <button type="button" data-drive="settings">Réglages Google…</button>
+            <button type="button" data-drive="sign-out">Se déconnecter</button>
+          </div>
+        </span>
         <button id="reset">Exemple</button>
       </div>
       <span class="actions-divider"></span>
@@ -89,6 +101,24 @@ app.innerHTML = `
   <section class="workspace">
     <button id="edit-toggle" class="edit-toggle" type="button" hidden>✎ Éditer</button>
     <div class="insert-backdrop" id="insert-backdrop" hidden></div>
+    <div class="track-picker drive-picker" id="drive-picker" role="dialog" aria-modal="true" hidden>
+      <div class="insert-menu-heading">Google Drive</div>
+      <h2 class="track-picker-title">Ouvrir un cours</h2>
+      <div class="track-picker-list" id="drive-picker-list"></div>
+      <div class="track-picker-actions">
+        <button type="button" id="drive-picker-cancel">Annuler</button>
+      </div>
+    </div>
+    <div class="track-picker drive-settings" id="drive-settings" role="dialog" aria-modal="true" hidden>
+      <div class="insert-menu-heading">Google Drive</div>
+      <h2 class="track-picker-title">Réglages Google</h2>
+      <p class="drive-help">Tout se passe côté client, avec OAuth seulement : aucune clé ni secret. Dans la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console Google Cloud</a>, activez l'API Drive et créez un identifiant OAuth de type <em>Application Web</em> avec, en origine JavaScript autorisée, l'adresse du site, et en URI de redirection autorisée <code>http://localhost:43110/</code> pour l'application de bureau.</p>
+      <label class="drive-field">Identifiant client OAuth (public)<input type="text" id="drive-client-id" placeholder="xxxx.apps.googleusercontent.com" spellcheck="false"></label>
+      <div class="track-picker-actions">
+        <button type="button" id="drive-settings-cancel">Annuler</button>
+        <button type="button" id="drive-settings-ok" class="primary">Enregistrer</button>
+      </div>
+    </div>
     <div class="track-picker" id="track-picker" role="dialog" aria-modal="true" aria-labelledby="track-picker-title" hidden>
       <div class="insert-menu-heading">Pistes à importer</div>
       <h2 id="track-picker-title" class="track-picker-title"></h2>
@@ -166,9 +196,140 @@ document.querySelector("#clear-md").addEventListener("click", () => {
   if (editor.value.trim() && !window.confirm("Effacer tout le document ?")) return;
   editor.value = "";
   currentFilePath = null;
+  driveFile = null;
   editor.focus();
   update();
   status.textContent = "Document effacé";
+});
+
+// ---- Google Drive: open, save, save as, settings, sign out ----
+const driveButton = document.querySelector("#drive-btn");
+const driveMenu = document.querySelector("#drive-menu");
+const drivePicker = document.querySelector("#drive-picker");
+const driveSettings = document.querySelector("#drive-settings");
+// The Drive file the document came from or was last saved to.
+let driveFile = null;
+
+function setDriveMenu(open) {
+  driveMenu.hidden = !open;
+  driveButton.setAttribute("aria-expanded", String(open));
+}
+driveButton.addEventListener("click", event => {
+  event.stopPropagation();
+  setDriveMenu(driveMenu.hidden);
+});
+document.addEventListener("click", event => {
+  if (!driveMenu.hidden && !driveMenu.contains(event.target)) setDriveMenu(false);
+});
+
+function showModal(modal) {
+  modal.hidden = false;
+  insertBackdrop.hidden = false;
+}
+function hideModal(modal) {
+  modal.hidden = true;
+  insertBackdrop.hidden = true;
+  insertBackdrop.onclick = null;
+}
+
+function openDriveSettings() {
+  document.querySelector("#drive-client-id").value = getDriveConfig().clientId;
+  showModal(driveSettings);
+  return new Promise(resolve => {
+    const finish = saved => {
+      hideModal(driveSettings);
+      resolve(saved);
+    };
+    document.querySelector("#drive-settings-ok").onclick = () => {
+      setDriveConfig({ clientId: document.querySelector("#drive-client-id").value.trim() });
+      finish(true);
+    };
+    document.querySelector("#drive-settings-cancel").onclick = () => finish(false);
+    insertBackdrop.onclick = () => finish(false);
+  });
+}
+
+// The file to open, from the app's own list of the Drive's Markdown files.
+// Resolves to { id, name } or null.
+async function chooseDriveFile() {
+  status.textContent = "Lecture de Google Drive…";
+  const files = await listMarkdownFiles();
+  const list = document.querySelector("#drive-picker-list");
+  list.innerHTML = files.length
+    ? files.map(file => `<button type="button" class="track-picker-row drive-file" data-id="${escapeHtml(file.id)}" data-name="${escapeHtml(file.name)}"><span class="track-picker-name">${escapeHtml(file.name)}</span><span class="track-picker-meta">modifié le ${escapeHtml(new Date(file.modifiedTime).toLocaleString("fr-FR"))}</span></button>`).join("")
+    : `<p class="drive-empty">Aucun fichier Markdown sur ce Drive.</p>`;
+  showModal(drivePicker);
+  return new Promise(resolve => {
+    const finish = chosen => {
+      hideModal(drivePicker);
+      resolve(chosen);
+    };
+    list.onclick = event => {
+      const row = event.target.closest(".drive-file");
+      if (row) finish({ id: row.dataset.id, name: row.dataset.name });
+    };
+    document.querySelector("#drive-picker-cancel").onclick = () => finish(null);
+    insertBackdrop.onclick = () => finish(null);
+  });
+}
+
+async function ensureDriveConfigured() {
+  if (getDriveConfig().clientId) return true;
+  return openDriveSettings() && Boolean(getDriveConfig().clientId);
+}
+
+async function driveOpen() {
+  if (!(await ensureDriveConfigured())) return;
+  const chosen = await chooseDriveFile();
+  if (!chosen) {
+    status.textContent = "Prêt";
+    return;
+  }
+  status.textContent = "Téléchargement…";
+  editor.value = await downloadFile(chosen.id);
+  driveFile = chosen;
+  currentFilePath = null;
+  update();
+  status.textContent = `Drive · ${chosen.name}`;
+}
+
+function suggestedDriveName() {
+  const { data } = parseFrontMatter(editor.value);
+  return `${slugify(data.title || "cours-guitare")}.md`;
+}
+
+async function driveSave({ saveAs = false } = {}) {
+  if (!(await ensureDriveConfigured())) return;
+  let target = driveFile;
+  if (saveAs || !target) {
+    const name = window.prompt("Nom du fichier sur Google Drive :", target?.name ?? suggestedDriveName());
+    if (name === null) return;
+    target = { id: saveAs ? null : target?.id ?? null, name: /\.md$/i.test(name.trim()) ? name.trim() : `${name.trim()}.md` };
+  }
+  status.textContent = "Enregistrement sur Drive…";
+  const saved = await uploadFile({ id: target.id, name: target.name, content: editor.value });
+  driveFile = { id: saved.id, name: saved.name ?? target.name };
+  status.textContent = `Enregistré sur Drive · ${driveFile.name}`;
+}
+
+driveMenu.addEventListener("click", async event => {
+  const action = event.target.closest("[data-drive]")?.dataset.drive;
+  if (!action) return;
+  setDriveMenu(false);
+  try {
+    if (action === "open") await driveOpen();
+    else if (action === "save") await driveSave();
+    else if (action === "save-as") await driveSave({ saveAs: true });
+    else if (action === "settings") await openDriveSettings();
+    else if (action === "sign-out") {
+      driveSignOut();
+      driveFile = null;
+      status.textContent = "Déconnecté de Google";
+    }
+  } catch (error) {
+    status.textContent = error.message;
+    console.error("[drive]", error);
+  }
 });
 
 // "+" in the Markdown pane title opens the menu of components to insert.

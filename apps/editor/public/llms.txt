@@ -295,6 +295,12 @@ Standard Markdown images and links work. In Web mode a YouTube link or a link to
 file (`.mp3`, `.wav`, `.ogg`…) becomes an embedded player; in Book/Poster modes every link is
 printed as a QR code.
 
+### Google Drive
+
+The "Drive ▾" menu opens a document from Google Drive, saves it back to the same file, or saves
+it under another name. Client-side OAuth only, with the user's own public OAuth client id (entered
+once in "Réglages Google…"), no API key or secret; nothing to write in the Markdown.
+
 ### Importing Guitar Pro
 
 The Import button also takes a Guitar Pro file (.gp3/.gp4/.gp5/.gpx/.gp): alphaTab parses it and

@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, ipcMain, session, shell } = require('electro
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { googleAuth } = require('./googleAuth.cjs');
 
 let mainWindow;
 
@@ -117,3 +118,12 @@ ipcMain.handle('document:export-html', async (_event, html, suggestedFileName) =
   await fs.writeFile(result.filePath, html, 'utf8');
   return { filePath: result.filePath };
 });
+
+ipcMain.handle('google:auth', async (_event, options) => {
+  try {
+    return await googleAuth(options ?? {});
+  } catch (error) {
+    return { error: error.message };
+  }
+});
+
