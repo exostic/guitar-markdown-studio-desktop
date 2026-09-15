@@ -173,6 +173,34 @@ button:focus-visible,
   background: var(--border-soft);
   margin: 0 0.3rem;
 }
+.pane-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+/* Round icon buttons at the right of the Markdown pane title. */
+.pane-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pane-icon:hover {
+  background: #7f1d1d;
+  border-color: #b91c1c;
+  color: #fff;
+}
 /* "+" at the right of the Markdown pane title. */
 .insert-open {
   display: inline-flex;

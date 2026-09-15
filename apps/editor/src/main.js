@@ -126,7 +126,7 @@ app.innerHTML = `
       </div>
     </div>
     <section class="pane editor-pane" id="editor-pane">
-      <div class="pane-title pane-title-row" id="editor-pane-title"><span>Markdown</span><button id="insert-open" class="insert-open" type="button" title="Insérer un composant" aria-haspopup="menu" aria-expanded="false">+</button></div>
+      <div class="pane-title pane-title-row" id="editor-pane-title"><span>Markdown</span><span class="pane-title-actions"><button id="clear-md" class="pane-icon" type="button" title="Tout effacer" aria-label="Tout effacer">🗑</button><button id="insert-open" class="insert-open" type="button" title="Insérer un composant" aria-haspopup="menu" aria-expanded="false">+</button></span></div>
       <textarea id="editor" spellcheck="false" wrap="off"></textarea>
     </section>
     <div class="resizer" id="pane-resizer"></div>
@@ -160,6 +160,16 @@ const previewPane = document.querySelector(".preview-pane");
 const editorPane = document.querySelector("#editor-pane");
 const resizer = document.querySelector("#pane-resizer");
 const editToggle = document.querySelector("#edit-toggle");
+// Trash in the Markdown pane title: empty the document, after confirmation.
+document.querySelector("#clear-md").addEventListener("click", () => {
+  if (editor.value.trim() && !window.confirm("Effacer tout le document ?")) return;
+  editor.value = "";
+  currentFilePath = null;
+  editor.focus();
+  update();
+  status.textContent = "Document effacé";
+});
+
 // "+" in the Markdown pane title opens the menu of components to insert.
 const insertOpen = document.querySelector("#insert-open");
 const insertMenu = document.querySelector("#insert-menu");
