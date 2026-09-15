@@ -1464,7 +1464,9 @@ function emailMessage(link) {
   const intro = ["Bonjour,", "", `Je te partage « ${title} », un cours de guitare préparé avec Guitar Markdown Studio.`, ""];
   const features = "Tu y retrouveras les accords, les grilles, les rythmiques, les tablatures et les partitions, et tu pourras écouter chaque morceau note par note.";
   const outro = ["", "Bonne musique ! 🎸", ""];
-  const withLink = [...intro, `Ouvre-le ici, il s'affiche directement : ${link}`, "", features, ...outro];
+  // The link alone on its line: a mailto body is plain text, mail clients
+  // turn a bare URL into a link when they display the message.
+  const withLink = [...intro, "Ouvre-le ici, il s'affiche directement :", "", link, "", features, ...outro];
   const paste = [
     ...intro,
     `Pour le lire, l'écouter et l'imprimer : ouvre https://gms.exostic.com, efface l'exemple (la corbeille du panneau Markdown) et colle le texte qui suit le trait ci-dessous. ${features}`,
