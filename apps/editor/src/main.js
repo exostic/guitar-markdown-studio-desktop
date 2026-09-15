@@ -14,6 +14,7 @@ import { setSampler } from "./audio/engine.js";
 import { destroyAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPro, onAlphaTabRendered, renderAlphaTabBlock } from "./alphatab.js";
 import { parseStaff } from "./blockOptions.js";
 import { downloadFile, getDriveConfig, listMarkdownFiles, setDriveConfig, shareFile, signOut as driveSignOut, uploadFile } from "./drive.js";
+import { shortenUrl } from "./shortlink.js";
 import LZString from "lz-string";
 
 const { compressToEncodedURIComponent, decompressFromEncodedURIComponent } = LZString;
@@ -1416,12 +1417,12 @@ shareButton.addEventListener("click", async () => {
 });
 
 // "Envoyer par e-mail…": the mail client opens (new tab on the web) on a
-// friendly message. The course itself goes into the body when the link
-// stays short enough for the mail clients: Gmail receives a mailto as a
-// URL and answers 400 beyond about 8 KB, the mailto itself being
-// percent-encoded once more on the way. Longer courses fall back to the
-// share link, and longer still to the clipboard, the message then asks
-// to paste.
+// friendly message with a link to the course, never the course itself:
+// Gmail receives a mailto as a URL and answers 400 beyond about 8 KB. The
+// link is a short alias of the share link; when the alias cannot be
+// made (offline, service down) the full share link goes when it fits,
+// and beyond that the Markdown is copied to the clipboard and the
+// message asks to paste it.
 const MAILTO_LIMIT = 7600;
 const EMAIL_RULE = "――――――――――――――――――――――――――――――";
 
@@ -1429,50 +1430,40 @@ function mailtoFits(mailto) {
   return encodeURIComponent(mailto).length < MAILTO_LIMIT;
 }
 
-function emailMessage() {
+function emailMessage(link) {
   const { data } = parseFrontMatter(editor.value);
   const title = data.title || "Cours de guitare";
-  const name = suggestedDriveName();
   const subject = `🎸 Cours de guitare : ${title}`;
   const intro = ["Bonjour,", "", `Je te partage « ${title} », un cours de guitare préparé avec Guitar Markdown Studio.`, ""];
   const features = "Tu y retrouveras les accords, les grilles, les rythmiques, les tablatures et les partitions, et tu pourras écouter chaque morceau note par note.";
-  const outro = ["", "Bonne musique ! 🎸"];
-  const inline = [
-    ...intro,
-    `Pour le lire, l'écouter et l'imprimer : ouvre https://gms.exostic.com, efface l'exemple (la corbeille du panneau Markdown) et colle le texte qui suit le trait ci-dessous. ${features}`,
-    "",
-    `Tu peux aussi l'enregistrer dans un fichier ${name} et l'ouvrir avec Fichier ▸ Ouvrir….`,
-    ...outro,
-    "",
-    EMAIL_RULE,
-    "",
-    editor.value.trim(),
-    "",
-  ];
-  const link = [...intro, `Ouvre-le ici, il s'affiche directement : ${buildShareUrl("web")}`, "", features, ...outro, ""];
+  const outro = ["", "Bonne musique ! 🎸", ""];
+  const withLink = [...intro, `Ouvre-le ici, il s'affiche directement : ${link}`, "", features, ...outro];
   const paste = [
     ...intro,
     `Pour le lire, l'écouter et l'imprimer : ouvre https://gms.exostic.com, efface l'exemple (la corbeille du panneau Markdown) et colle le texte qui suit le trait ci-dessous. ${features}`,
     ...outro,
-    "",
     EMAIL_RULE,
     "",
   ];
-  return { subject, inline: inline.join("\n"), link: link.join("\n"), paste: paste.join("\n") };
+  return { subject, withLink: withLink.join("\n"), paste: paste.join("\n") };
 }
 
 async function shareByEmail() {
-  const message = emailMessage();
-  const mailtoFor = body => `mailto:?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(body)}`;
-  let mailto = mailtoFor(message.inline);
-  let note = "Message prêt dans ta messagerie, le cours est dedans";
-  if (!mailtoFits(mailto)) {
-    mailto = mailtoFor(message.link);
-    note = "Message prêt dans ta messagerie, avec le lien du cours";
+  const shareUrl = buildShareUrl("web");
+  status.textContent = "Préparation du lien…";
+  let link = shareUrl;
+  try {
+    link = await shortenUrl(shareUrl);
+  } catch (error) {
+    console.warn("[share] lien court impossible, lien complet utilisé", error);
   }
+  const message = emailMessage(link);
+  const mailtoFor = body => `mailto:?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(body)}`;
+  let mailto = mailtoFor(message.withLink);
+  let note = link === shareUrl ? "Message prêt dans ta messagerie, avec le lien complet du cours" : "Message prêt dans ta messagerie, avec le lien du cours";
   if (!mailtoFits(mailto)) {
     const copied = await copyToClipboard(editor.value);
-    if (!copied) throw new Error("Cours trop long pour un e-mail et copie impossible : partage-le par Drive ou par lien.");
+    if (!copied) throw new Error("Lien court indisponible, cours trop long pour un e-mail et copie impossible : partage-le par Drive.");
     mailto = mailtoFor(message.paste);
     note = "Cours copié : colle-le à la fin du message";
   }
