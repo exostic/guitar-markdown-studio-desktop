@@ -144,3 +144,16 @@ export async function uploadFile({ id = null, name, content }) {
   const response = await driveFetch(url, { method: id ? "PATCH" : "POST", headers: { "Content-Type": `multipart/related; boundary=${boundary}` }, body });
   return response.json();
 }
+
+// Gives another Google account access to a file the app created (Drive
+// sends the invitation email). `role`: "reader" or "writer".
+export async function shareFile(id, { email, role = "reader", message = "" }) {
+  const params = new URLSearchParams({ sendNotificationEmail: "true", fields: "id,role,emailAddress" });
+  if (message) params.set("emailMessage", message);
+  const response = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(id)}/permissions?${params}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "user", role, emailAddress: email }),
+  });
+  return response.json();
+}

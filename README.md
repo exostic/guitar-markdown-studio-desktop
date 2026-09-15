@@ -210,7 +210,7 @@ Les règles de confidentialité et les conditions d'utilisation sont servies à 
 
 ## Google Drive
 
-Le menu **Drive ▾** ouvre un cours depuis Google Drive, l'enregistre (sur le même fichier) ou l'enregistre sous un autre nom. Tout se passe côté client, avec OAuth seulement : il n'y a ni clé API ni secret dans l'application, seulement l'identifiant client OAuth, qui est public et déjà renseigné. Pour utiliser un autre projet Google, saisissez son identifiant dans **Réglages Google…** :
+Le menu **Fichier ▾** ouvre un cours depuis Google Drive, l'enregistre (sur le même fichier), l'enregistre sous un autre nom, ou le partage avec un autre compte Google (**Partager sur Drive avec…** : adresse, lecture ou modification, Drive envoie l'invitation ; le destinataire l'ouvre depuis son Drive et, pour l'éditer dans l'application, l'importe puis l'enregistre sur son propre Drive). Tout se passe côté client, avec OAuth seulement : il n'y a ni clé API ni secret dans l'application, seulement l'identifiant client OAuth, qui est public et déjà renseigné. Pour utiliser un autre projet Google, saisissez son identifiant dans **Réglages Google…** :
 
 1. Dans la [console Google Cloud](https://console.cloud.google.com/apis/credentials), créez un projet, activez l'**API Google Drive**, et configurez l'écran de consentement OAuth (type externe, en mode test, avec votre adresse Google comme testeur).
 2. Créez un identifiant OAuth de type **Application Web** avec, en origine JavaScript autorisée, l'adresse du site (et `http://localhost:5173` pour le développement), et en URI de redirection autorisée `http://localhost:43110/` pour l'application de bureau. Copiez l'identifiant client dans les réglages.

@@ -13,7 +13,7 @@ import { parseSound } from "./audio/sound.js";
 import { setSampler } from "./audio/engine.js";
 import { destroyAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPro, onAlphaTabRendered, renderAlphaTabBlock } from "./alphatab.js";
 import { parseStaff } from "./blockOptions.js";
-import { downloadFile, getDriveConfig, listMarkdownFiles, setDriveConfig, signOut as driveSignOut, uploadFile } from "./drive.js";
+import { downloadFile, getDriveConfig, listMarkdownFiles, setDriveConfig, shareFile, signOut as driveSignOut, uploadFile } from "./drive.js";
 import LZString from "lz-string";
 
 const { compressToEncodedURIComponent, decompressFromEncodedURIComponent } = LZString;
@@ -85,6 +85,7 @@ app.innerHTML = `
           <button type="button" data-drive="open">Ouvrir depuis Drive…</button>
           <button type="button" data-drive="save">Enregistrer sur Drive</button>
           <button type="button" data-drive="save-as">Enregistrer sous… (Drive)</button>
+          <button type="button" data-drive="share">Partager sur Drive avec…</button>
           <button type="button" data-drive="settings">Réglages Google…</button>
           <button type="button" data-drive="sign-out">Se déconnecter</button>
         </div>
@@ -329,6 +330,28 @@ async function driveSave({ saveAs = false } = {}) {
   status.textContent = `Enregistré sur Drive · ${driveFile.name}`;
 }
 
+// Share the document's Drive file with another Google account: saves it
+// first when it is not on Drive yet, asks for the address and whether the
+// person may edit, then Drive sends the invitation.
+async function driveShare() {
+  if (!(await ensureDriveConfigured())) return;
+  if (!driveFile) {
+    await driveSave();
+    if (!driveFile) return;
+  }
+  const email = window.prompt(`Partager « ${driveFile.name} » avec (adresse Google) :`, "");
+  if (!email) return;
+  const address = email.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+    status.textContent = "Adresse e-mail invalide";
+    return;
+  }
+  const canEdit = window.confirm(`Autoriser ${address} à modifier le document ?\n\nOK : modification. Annuler : lecture seule.`);
+  status.textContent = "Partage en cours…";
+  const granted = await shareFile(driveFile.id, { email: address, role: canEdit ? "writer" : "reader", message: `${driveFile.name} — cours de guitare partagé depuis Guitar Markdown Studio.` });
+  status.textContent = `Partagé avec ${granted.emailAddress ?? address} (${canEdit ? "modification" : "lecture"})`;
+}
+
 driveMenu.addEventListener("click", async event => {
   const action = event.target.closest("[data-drive]")?.dataset.drive;
   if (!action) return;
@@ -336,6 +359,7 @@ driveMenu.addEventListener("click", async event => {
     if (action === "open") await driveOpen();
     else if (action === "save") await driveSave();
     else if (action === "save-as") await driveSave({ saveAs: true });
+    else if (action === "share") await driveShare();
     else if (action === "settings") await openDriveSettings();
     else if (action === "sign-out") {
       driveSignOut();
