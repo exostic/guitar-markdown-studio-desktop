@@ -51,6 +51,8 @@ qr: false
 - `capo` + `sounding: true` : affiche entre parenthèses l'accord réellement entendu (« Am (Cm) » avec un capo en 3) sur les diagrammes d'accords et dans les grilles.
 - `tuning` : `Standard`, `Drop D`, `DADGAD`, `Open G`, `Open D`, `Eb standard` ou une liste `D A D G B e`. Utilisé par les diagrammes de gamme, l'accordeur et la lecture audio.
 - `sound` : instrument de la lecture audio — `acoustic` (défaut), `electric` (guitare électrique claire) ou `distortion` (électrique saturée). Les mots français fonctionnent aussi (`électrique`, `saturé`).
+- `samples` : `off` pour jouer avec la corde synthétisée plutôt qu'avec les échantillons de guitare (une SoundFont General MIDI, chargée en arrière-plan ; la synthèse reste utilisée tant qu'elle n'est pas prête).
+- `soundfont` : URL d'une autre SoundFont (`.sf2`) pour de meilleurs échantillons, par exemple une banque de guitare dédiée.
 - `tempo` : cliquer sur la pastille lance un métronome (mode Web).
 
 ## Tablatures
@@ -214,7 +216,7 @@ Le rythme est écrit dans l'espacement des colonnes (cases égales par mesure), 
 
 En mode Web, un bouton **▶ Écouter** apparaît au-dessus des blocs `tab`, `partition`, `chords`, `grid` et `rhythm` :
 
-- tablature / partition : chaque note est jouée par une corde pincée synthétisée (Karplus-Strong, une couleur par corde, caisse de résonance et pièce synthétisées, accords égrenés et jeu légèrement humanisé), au tempo du front matter, la mesure en cours est encadrée et la note (ou l'accord) en cours passe en rose sur la portée et la tablature ; un clic sur une note la joue seule, y place le curseur de lecture, et sélectionne la note correspondante dans le Markdown (l'éditeur défile jusqu'à elle) ; **▶ Écouter** repart de ce curseur (il s'efface quand la lecture atteint la fin du bloc) ; pendant la lecture, l'aperçu suit la note en cours (l'éditeur, lui, ne bouge pas) ; la touche **Espace** met en pause, reprend, ou relance le dernier bloc écouté quand le focus n'est pas dans un champ de texte ;
+- tablature / partition : chaque note est jouée par un échantillon de guitare (SoundFont) ou, à défaut, une corde pincée synthétisée (Karplus-Strong, une couleur par corde, caisse de résonance et pièce synthétisées), accords égrenés et jeu légèrement humanisé, au tempo du front matter, la mesure en cours est encadrée et la note (ou l'accord) en cours passe en rose sur la portée et la tablature ; un clic sur une note la joue seule, y place le curseur de lecture, et sélectionne la note correspondante dans le Markdown (l'éditeur défile jusqu'à elle) ; **▶ Écouter** repart de ce curseur (il s'efface quand la lecture atteint la fin du bloc) ; pendant la lecture, l'aperçu suit la note en cours (l'éditeur, lui, ne bouge pas) ; la touche **Espace** met en pause, reprend, ou relance le dernier bloc écouté quand le focus n'est pas dans un champ de texte ;
 - accords : chaque diagramme est gratté tour à tour (un clic sur un diagramme le gratte seul) ;
 - grille : un accord par mesure (reprises et `xN` respectés, chiffres romains résolus dans la tonalité), et un clic sur une case joue son accord ;
 - cercle des quintes : un clic sur un secteur (majeur ou mineur) joue l'accord correspondant ;

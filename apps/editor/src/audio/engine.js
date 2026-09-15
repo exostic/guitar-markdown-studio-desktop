@@ -5,6 +5,7 @@
 import { midiToFrequency } from "@gms/guitar-markdown";
 import { renderBodyImpulse, renderCabinetImpulse, renderRoomImpulse } from "./impulse.js";
 import { guessString, renderPluck } from "./string.js";
+import { isSamplerReady, loadSampler, voiceFor } from "./sampler.js";
 
 let context = null;
 let master = null;
@@ -54,6 +55,15 @@ export async function ensureRunning() {
     }
   }
   return ctx;
+}
+
+// Sampled guitars (a SoundFont) instead of the synthesized string, once the
+// bank has loaded; the synth stays the fallback.
+let samplerEnabled = true;
+
+export function setSampler({ enabled = true, url = null } = {}) {
+  samplerEnabled = enabled;
+  if (enabled && url) loadSampler(url);
 }
 
 export function setSound(name) {
@@ -284,21 +294,42 @@ export function pluck({ midi, time, duration = 2, velocity = 1, string = null, l
     return;
   }
   const source = ctx.createBufferSource();
-  source.buffer = pluckBuffer(baseMidi, string ?? guessString(baseMidi), Math.floor(Math.random() * PLUCK_VARIANTS));
+  const sample = samplerEnabled && isSamplerReady() ? voiceFor(ctx, currentSound, baseMidi) : null;
   const gain = ctx.createGain();
-  const level = Math.max(0.05, Math.min(1, humanVelocity)) * 0.5;
-  const hold = Math.max(0.08, Math.min(PLUCK_SECONDS - 0.3, duration));
+  let level = Math.max(0.05, Math.min(1, humanVelocity)) * 0.5;
+  const hold = Math.max(0.08, Math.min(sample ? 8 : PLUCK_SECONDS - 0.3, duration));
   const stopAt = onset + hold + 0.2;
-  if (legato) {
-    gain.gain.setValueAtTime(0.001, onset);
-    gain.gain.exponentialRampToValueAtTime(level, onset + LEGATO_FADE_SECONDS);
+  let unit = 1;
+  if (sample) {
+    // A sampled note: the zone's sample on pitch, looping while held, its
+    // own envelope decaying into the sustain level.
+    source.buffer = sample.buffer;
+    unit = sample.rate;
+    if (sample.loop) {
+      source.loop = true;
+      source.loopStart = sample.loop.start;
+      source.loopEnd = sample.loop.end;
+    }
+    level *= sample.gain * 1.6;
+    const { attack, decay, sustain } = sample.envelope;
+    gain.gain.setValueAtTime(legato ? 0.001 : Math.max(0.001, level * 0.2), onset);
+    gain.gain.exponentialRampToValueAtTime(level, onset + Math.max(legato ? LEGATO_FADE_SECONDS : 0.003, Math.min(attack, 0.05)));
+    const floor = Math.max(0.001, level * Math.max(sustain, 0.02));
+    // Exponential decay reaches the sustain floor after `decay` seconds.
+    gain.gain.setTargetAtTime(floor, onset + Math.min(attack, 0.05), Math.max(0.05, decay / 4));
   } else {
-    gain.gain.setValueAtTime(level, onset);
+    source.buffer = pluckBuffer(baseMidi, string ?? guessString(baseMidi), Math.floor(Math.random() * PLUCK_VARIANTS));
+    if (legato) {
+      gain.gain.setValueAtTime(0.001, onset);
+      gain.gain.exponentialRampToValueAtTime(level, onset + LEGATO_FADE_SECONDS);
+    } else {
+      gain.gain.setValueAtTime(level, onset);
+    }
   }
-  gain.gain.setValueAtTime(level, onset + hold);
-  gain.gain.exponentialRampToValueAtTime(0.001, onset + hold + 0.18);
+  gain.gain.cancelScheduledValues(onset + hold);
+  gain.gain.setTargetAtTime(0.001, onset + hold, 0.045);
 
-  scheduleGlides(source.playbackRate, 1, baseMidi, glides, onset, hold);
+  scheduleGlides(source.playbackRate, unit, baseMidi, glides, onset, hold);
 
   // Soft picking is darker as well as quieter; a hammered note has no pick
   // edge at all.

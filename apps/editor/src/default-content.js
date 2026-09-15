@@ -8,6 +8,8 @@ time: 4/4
 capo: 0
 key: G
 tuning: Standard
+sound: acoustic
+samples: on
 ---
 
 > **Objectif :** travailler un arpège régulier, les changements d'accords et quelques techniques de liaison.
@@ -51,7 +53,7 @@ E|0---------------|----------------|3---------------|----------------|
 
 ## Partition
 
-Le même arpège en notation classique. La ligne \`staff:\` choisit la portée, la tablature, ou les deux.
+Le même arpège en notation classique. La ligne \`staff:\` choisit la portée, la tablature, ou les deux. La lecture utilise des échantillons de guitare (\`samples: on\` dans le front matter, \`sound\` choisit acoustique, électrique ou saturée) ; mettez \`samples: off\` pour entendre la corde synthétisée à la place.
 
 \`\`\`partition
 staff: tab et partition

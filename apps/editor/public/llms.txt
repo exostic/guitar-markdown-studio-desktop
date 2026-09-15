@@ -77,6 +77,8 @@ qr: false
 - `capo` + `sounding: true`: shows the sounding chord in parentheses, e.g. `Am (Cm)` with capo 3.
 - `tuning`: `Standard`, `Drop D`, `DADGAD`, `Open G`, `Open D`, `Eb standard`, or an explicit
   low-to-high list `D A D G B e`. Used by scale diagrams, the tuner and audio playback.
+- `samples`: `off` to play with the synthesized string instead of the sampled guitars (a General
+  MIDI SoundFont loaded in the background). `soundfont`: URL of another `.sf2` bank to use.
 - `sound`: instrument used by audio playback — `acoustic` (default), `electric` (clean electric
   guitar) or `distortion` (overdriven electric guitar). French words work too (`électrique`,
   `saturé`). Only affects the sound, never the notation.

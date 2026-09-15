@@ -10,6 +10,7 @@ import { renderFretboardScale } from "@gms/renderer-fretboard";
 import { parseTuning } from "@gms/guitar-markdown";
 import { bindPlayback, clearRegistry, registerBlock, stopAll, syncSpeedControls, togglePlayPause } from "./audio/playback.js";
 import { parseSound } from "./audio/sound.js";
+import { setSampler } from "./audio/engine.js";
 import { destroyAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPro, onAlphaTabRendered, renderAlphaTabBlock } from "./alphatab.js";
 import { parseStaff } from "./blockOptions.js";
 import LZString from "lz-string";
@@ -712,6 +713,11 @@ function applyEditorWidth() {
 // notes), time signature (a 6/8 bar is 3 quarter-beats), tuning, capo,
 // transposition and the instrument sound. Rebuilt on every render; read
 // lazily by the click handler.
+// The General MIDI bank alphaTab ships, copied next to the page by its
+// vite plugin; fetched once, in the background, at startup.
+const DEFAULT_SOUNDFONT_URL = new URL("soundfont/sonivox.sf2", document.baseURI).href;
+setSampler({ enabled: true, url: DEFAULT_SOUNDFONT_URL });
+
 let docSettings = { bpm: 80, timeSignature: "4/4", tuning: parseTuning(""), capo: 0, semitones: 0, sound: "acoustic", staff: null };
 
 function refreshDocSettings(data) {
@@ -727,7 +733,12 @@ function refreshDocSettings(data) {
     // block draws, instead of tab for `tab` and staff for `partition`; a
     // block's own `staff:` line overrides it.
     staff: parseStaff(data.staff ?? data.portee ?? data.portée),
+    // `samples: off` keeps the synthesized string; `soundfont: <url>` plays
+    // another SoundFont than the one shipped with the app.
+    samples: !/^(off|non|false|0|synth)$/i.test((data.samples ?? "").trim()),
+    soundfont: (data.soundfont ?? "").trim() || null,
   };
+  setSampler({ enabled: docSettings.samples, url: docSettings.soundfont ? new URL(docSettings.soundfont, document.baseURI).href : DEFAULT_SOUNDFONT_URL });
 }
 
 // A note clicked in the preview: select its fret in the Markdown and
