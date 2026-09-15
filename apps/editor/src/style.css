@@ -302,12 +302,12 @@ button:focus-visible,
   box-sizing: border-box;
   cursor: pointer;
 }
-/* Google Drive menu under its toolbar button. */
-.drive-menu-wrap {
+/* Toolbar dropdowns (Fichier, Partager). */
+.dropdown {
   position: relative;
   display: inline-block;
 }
-.drive-menu {
+.dropdown-menu {
   position: absolute;
   top: calc(100% + 0.35rem);
   left: 0;
@@ -329,16 +329,29 @@ button:focus-visible,
     transform: translateY(-4px);
   }
 }
-.drive-menu[hidden] {
+.dropdown-menu[hidden] {
   display: none;
 }
-.drive-menu button {
+.dropdown-menu button,
+.dropdown-menu .button {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   text-align: left;
   font-size: 0.8rem;
   padding: 0.4rem 0.7rem;
   border-color: transparent;
+  cursor: pointer;
 }
-.drive-menu hr {
+.dropdown-heading {
+  padding: 0.35rem 0.7rem 0.1rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--secondary);
+}
+.dropdown-menu hr {
   margin: 0.25rem 0;
   border: 0;
   border-top: 1px solid var(--border-soft);

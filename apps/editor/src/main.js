@@ -73,28 +73,29 @@ app.innerHTML = `
     </div>
     <div class="actions">
       <span id="status">Prêt</span>
-      <div class="actions-group">
-        <button id="open-md">Ouvrir</button>
-        <label class="button browser-import" title="Ouvrir un cours Markdown ou importer un fichier Guitar Pro">Importer<input id="import-file" type="file" accept=".md,.markdown,.gp,.gp3,.gp4,.gp5,.gpx" hidden></label>
-        <button id="download-md">Enregistrer .md</button>
-        <span class="drive-menu-wrap">
-          <button id="drive-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="Google Drive">Drive ▾</button>
-          <div class="drive-menu" id="drive-menu" role="menu" hidden>
-            <button type="button" data-drive="open">Ouvrir depuis Drive…</button>
-            <button type="button" data-drive="save">Enregistrer sur Drive</button>
-            <button type="button" data-drive="save-as">Enregistrer sous… (Drive)</button>
-            <hr>
-            <button type="button" data-drive="settings">Réglages Google…</button>
-            <button type="button" data-drive="sign-out">Se déconnecter</button>
-          </div>
-        </span>
-        <button id="reset">Exemple</button>
-      </div>
-      <span class="actions-divider"></span>
-      <div class="actions-group">
-        <button id="share-btn" type="button">Partager</button>
-        <button id="view-only-btn" type="button">Aperçu client</button>
-      </div>
+      <span class="dropdown">
+        <button id="file-btn" type="button" aria-haspopup="menu" aria-expanded="false">Fichier ▾</button>
+        <div class="dropdown-menu" id="file-menu" role="menu" hidden>
+          <button id="open-md">Ouvrir…</button>
+          <label class="button browser-import" title="Ouvrir un cours Markdown ou importer un fichier Guitar Pro">Importer…<input id="import-file" type="file" accept=".md,.markdown,.gp,.gp3,.gp4,.gp5,.gpx" hidden></label>
+          <button id="download-md">Enregistrer .md</button>
+          <button id="reset">Exemple</button>
+          <hr>
+          <div class="dropdown-heading">Google Drive</div>
+          <button type="button" data-drive="open">Ouvrir depuis Drive…</button>
+          <button type="button" data-drive="save">Enregistrer sur Drive</button>
+          <button type="button" data-drive="save-as">Enregistrer sous… (Drive)</button>
+          <button type="button" data-drive="settings">Réglages Google…</button>
+          <button type="button" data-drive="sign-out">Se déconnecter</button>
+        </div>
+      </span>
+      <span class="dropdown">
+        <button id="share-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false">Partager ▾</button>
+        <div class="dropdown-menu" id="share-menu" role="menu" hidden>
+          <button id="share-btn" type="button">Copier un lien de partage</button>
+          <button id="view-only-btn" type="button">Aperçu client</button>
+        </div>
+      </span>
       <button id="print" class="primary">Imprimer / PDF</button>
     </div>
   </header>
@@ -202,25 +203,41 @@ document.querySelector("#clear-md").addEventListener("click", () => {
   status.textContent = "Document effacé";
 });
 
+// ---- Toolbar dropdowns: "Fichier" and "Partager" ----
+// A click on the button toggles its menu; a click anywhere else, Escape,
+// or choosing an item closes it (the item keeps its own handler).
+const dropdowns = [...document.querySelectorAll(".topbar .dropdown")].map(wrap => ({ button: wrap.querySelector("button[aria-haspopup]"), menu: wrap.querySelector(".dropdown-menu") }));
+function closeDropdowns() {
+  for (const { button, menu } of dropdowns) {
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  }
+}
+for (const { button, menu } of dropdowns) {
+  button.addEventListener("click", event => {
+    event.stopPropagation();
+    const open = menu.hidden;
+    closeDropdowns();
+    menu.hidden = !open;
+    button.setAttribute("aria-expanded", String(open));
+  });
+  menu.addEventListener("click", event => {
+    if (event.target.closest("button, label")) closeDropdowns();
+  });
+}
+document.addEventListener("click", event => {
+  if (!event.target.closest(".topbar .dropdown")) closeDropdowns();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeDropdowns();
+});
+
 // ---- Google Drive: open, save, save as, settings, sign out ----
-const driveButton = document.querySelector("#drive-btn");
-const driveMenu = document.querySelector("#drive-menu");
+const driveMenu = document.querySelector("#file-menu");
 const drivePicker = document.querySelector("#drive-picker");
 const driveSettings = document.querySelector("#drive-settings");
 // The Drive file the document came from or was last saved to.
 let driveFile = null;
-
-function setDriveMenu(open) {
-  driveMenu.hidden = !open;
-  driveButton.setAttribute("aria-expanded", String(open));
-}
-driveButton.addEventListener("click", event => {
-  event.stopPropagation();
-  setDriveMenu(driveMenu.hidden);
-});
-document.addEventListener("click", event => {
-  if (!driveMenu.hidden && !driveMenu.contains(event.target)) setDriveMenu(false);
-});
 
 function showModal(modal) {
   modal.hidden = false;
@@ -315,7 +332,6 @@ async function driveSave({ saveAs = false } = {}) {
 driveMenu.addEventListener("click", async event => {
   const action = event.target.closest("[data-drive]")?.dataset.drive;
   if (!action) return;
-  setDriveMenu(false);
   try {
     if (action === "open") await driveOpen();
     else if (action === "save") await driveSave();
