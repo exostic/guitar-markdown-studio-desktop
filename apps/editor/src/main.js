@@ -85,38 +85,38 @@ app.innerHTML = `
       <button id="print" class="primary">Imprimer / PDF</button>
     </div>
   </header>
-  <nav class="insertbar">
-    <span class="insert-label">Insérer</span>
-    <div class="insert-group">
-      <button data-insert="tab">Tablature</button>
-      <button data-insert="partition">Partition</button>
-      <button data-insert="chords">Accords</button>
-      <button data-insert="rhythm">Rythmique</button>
-      <button data-insert="grid">Grille</button>
-    </div>
-    <span class="insert-divider"></span>
-    <div class="insert-group">
-      <button data-insert="scale">Gamme</button>
-      <button data-insert="arpeggio">Arpège</button>
-      <button data-insert="key">Tonalité</button>
-      <button data-insert="circle">Cercle des quintes</button>
-      <button data-insert="tuner">Accordeur</button>
-    </div>
-    <span class="insert-divider"></span>
-    <div class="insert-group">
-      <button data-insert="pagebreak">Saut de page</button>
-      <button data-insert="landscapebreak">Saut de page (mode optimisé)</button>
-      <button data-insert="columnbreak">Saut de colonne (mode optimisé)</button>
-      <button data-insert="columns">Colonnes</button>
-      <button data-insert="zoom">Zoom</button>
-      <button data-insert="link">Lien</button>
-    </div>
-    <span class="grow"></span>
-  </nav>
   <section class="workspace">
     <button id="edit-toggle" class="edit-toggle" type="button" hidden>✎ Éditer</button>
+    <div class="insert-backdrop" id="insert-backdrop" hidden></div>
+    <div class="insert-menu" id="insert-menu" role="menu" aria-label="Insérer un composant" hidden>
+      <div class="insert-menu-section">
+        <div class="insert-menu-heading">Notation</div>
+        <button data-insert="tab">Tablature</button>
+        <button data-insert="partition">Partition</button>
+        <button data-insert="chords">Accords</button>
+        <button data-insert="rhythm">Rythmique</button>
+        <button data-insert="grid">Grille</button>
+      </div>
+      <div class="insert-menu-section">
+        <div class="insert-menu-heading">Théorie</div>
+        <button data-insert="scale">Gamme</button>
+        <button data-insert="arpeggio">Arpège</button>
+        <button data-insert="key">Tonalité</button>
+        <button data-insert="circle">Cercle des quintes</button>
+        <button data-insert="tuner">Accordeur</button>
+      </div>
+      <div class="insert-menu-section">
+        <div class="insert-menu-heading">Mise en page</div>
+        <button data-insert="pagebreak">Saut de page</button>
+        <button data-insert="landscapebreak">Saut de page (Poster)</button>
+        <button data-insert="columnbreak">Saut de colonne (Poster)</button>
+        <button data-insert="columns">Colonnes</button>
+        <button data-insert="zoom">Zoom</button>
+        <button data-insert="link">Lien</button>
+      </div>
+    </div>
     <section class="pane editor-pane" id="editor-pane">
-      <div class="pane-title" id="editor-pane-title">Markdown</div>
+      <div class="pane-title pane-title-row" id="editor-pane-title"><span>Markdown</span><button id="insert-open" class="insert-open" type="button" title="Insérer un composant" aria-haspopup="menu" aria-expanded="false">+</button></div>
       <textarea id="editor" spellcheck="false"></textarea>
     </section>
     <div class="resizer" id="pane-resizer"></div>
@@ -150,7 +150,26 @@ const previewPane = document.querySelector(".preview-pane");
 const editorPane = document.querySelector("#editor-pane");
 const resizer = document.querySelector("#pane-resizer");
 const editToggle = document.querySelector("#edit-toggle");
-const insertbar = document.querySelector(".insertbar");
+// "+" in the Markdown pane title opens the menu of components to insert.
+const insertOpen = document.querySelector("#insert-open");
+const insertMenu = document.querySelector("#insert-menu");
+const insertBackdrop = document.querySelector("#insert-backdrop");
+function setInsertMenu(open) {
+  insertMenu.hidden = !open;
+  insertBackdrop.hidden = !open;
+  insertOpen.setAttribute("aria-expanded", String(open));
+  insertOpen.textContent = open ? "×" : "+";
+}
+insertOpen.addEventListener("click", event => {
+  event.stopPropagation();
+  setInsertMenu(insertMenu.hidden);
+});
+document.addEventListener("click", event => {
+  if (!insertMenu.hidden && !insertMenu.contains(event.target)) setInsertMenu(false);
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !insertMenu.hidden) setInsertMenu(false);
+});
 const topbar = document.querySelector(".topbar");
 const editorPaneTitle = document.querySelector("#editor-pane-title");
 const previewPaneTitle = document.querySelector("#preview-pane-title");
@@ -605,7 +624,6 @@ function applyCompactMode() {
     // hidden control, since the topbar's own print button is unreachable.
     workspace.classList.remove("compact", "editor-overlay");
     topbar.hidden = true;
-    insertbar.hidden = true;
     editorPane.hidden = true;
     resizer.hidden = true;
     editToggle.hidden = true;
@@ -623,7 +641,6 @@ function applyCompactMode() {
   workspace.classList.toggle("compact", compactQuery.matches);
   if (!compactQuery.matches) {
     workspace.classList.remove("editor-overlay");
-    insertbar.hidden = false;
     topbar.hidden = false;
     editorPaneTitle.classList.remove("expandable", "expanded");
     previewPaneTitle.classList.remove("expandable", "expanded");
@@ -642,7 +659,6 @@ function applyCompactMode() {
   editorPane.style.width = "100%";
   previewPane.hidden = showEditor;
   topbar.hidden = !toolbarOpen;
-  insertbar.hidden = !(showEditor && toolbarOpen);
   editorPaneTitle.classList.toggle("expandable", showEditor);
   editorPaneTitle.classList.toggle("expanded", showEditor && toolbarOpen);
   previewPaneTitle.classList.toggle("expandable", !showEditor);
@@ -812,6 +828,7 @@ previewPane.addEventListener("scroll", () => {
 
 document.querySelectorAll("[data-insert]").forEach(button => button.addEventListener("click", () => {
   editor.setRangeText(snippets[button.dataset.insert], editor.selectionStart, editor.selectionEnd, "end");
+  setInsertMenu(false);
   editor.focus();
   update();
 }));

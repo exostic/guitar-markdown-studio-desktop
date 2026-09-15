@@ -167,39 +167,112 @@ button:focus-visible,
   align-items: center;
   gap: 0.35rem;
 }
-.actions-divider,
-.insert-divider {
+.actions-divider {
   width: 1px;
   height: 1.5rem;
   background: var(--border-soft);
   margin: 0 0.3rem;
 }
-.insertbar {
-  display: flex;
-  gap: 0.4rem;
+/* "+" at the right of the Markdown pane title. */
+.insert-open {
+  display: inline-flex;
   align-items: center;
-  padding: 0.45rem 1.1rem;
-  background: var(--bg-panel);
-  border-bottom: 1px solid var(--border-soft);
-  flex-wrap: wrap;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--secondary);
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
-.insert-label {
-  font-size: 0.68rem;
+.insert-open:hover,
+.insert-open[aria-expanded="true"] {
+  background: var(--secondary);
+  border-color: var(--secondary);
+  color: #fff;
+}
+.insert-open[aria-expanded="true"] {
+  transform: rotate(90deg);
+}
+/* The menu of components: a modal centred on the window over a dimmed
+   backdrop (a click on the backdrop closes it). */
+.insert-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: rgb(3 0 20 / 0.55);
+  animation: insert-fade 0.18s ease-out;
+}
+.insert-backdrop[hidden] {
+  display: none;
+}
+@keyframes insert-fade {
+  from {
+    opacity: 0;
+  }
+}
+.insert-menu {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 30;
+  max-width: min(92vw, 60rem);
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: 0.9rem 1.4rem;
+  padding: 0.9rem 1rem 1rem;
+  /* Opaque: the panel colour is translucent and the editor would show through. */
+  background: #120838;
+  border: 1px solid rgb(148 163 184 / 0.35);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.55);
+  transform-origin: center;
+  animation: insert-pop 0.18s ease-out;
+}
+.insert-menu[hidden] {
+  display: none;
+}
+@keyframes insert-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+}
+.insert-menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 10.5rem;
+}
+.insert-menu-heading {
+  margin-bottom: 0.2rem;
+  font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--secondary);
-  margin-right: 0.35rem;
 }
-.insert-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-.insertbar button {
-  padding: 0.3rem 0.7rem;
-  font-size: 0.75rem;
+.insert-menu button {
+  text-align: left;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
   border-color: rgb(100 116 139 / 0.4);
+}
+@media (max-width: 720px) {
+  .insert-menu {
+    grid-template-columns: 1fr;
+    width: 92vw;
+    max-height: 80vh;
+    overflow: auto;
+  }
 }
 .grow {
   flex: 1;
@@ -228,7 +301,7 @@ button:focus-visible,
   display: flex;
   background: var(--border-soft);
   gap: 1px;
-  /* Explicit, so hiding .topbar/.insertbar (both display:none in compact mode)
+  /* Explicit, so hiding .topbar (display:none in compact mode)
      doesn't shift this into their now-empty auto-placed track instead of the
      1fr row it's meant to fill. */
   grid-row: 3;
@@ -259,9 +332,6 @@ button:focus-visible,
   display: none;
 }
 .pane-title[hidden] {
-  display: none;
-}
-.insertbar[hidden] {
   display: none;
 }
 .edit-toggle {
@@ -1119,7 +1189,6 @@ pre {
     color-scheme: light;
   }
   .topbar,
-  .insertbar,
   .editor-pane,
   .pane-title,
   .edit-toggle,
