@@ -299,8 +299,7 @@ printed as a QR code.
 
 The "Fichier ▾" menu opens a document from Google Drive, saves it back to the same file or saves
 it under another name; "Partager ▾" shares the Drive file with another Google account (reader or writer)
-or sends the .md by e-mail with a ready-made message: through the Gmail API (`gmail.send` scope, asked
-for only then) or through the mail client (system share sheet, or download + mailto fallback). Client-side OAuth only with the `drive.file` scope (the app sees only the
+or sends the .md by e-mail with a ready-made message (system share sheet, or download + mailto fallback). Client-side OAuth only with the `drive.file` scope (the app sees only the
 files it created or saved), the public OAuth client id, no API key or secret; nothing to write in
 the Markdown.
 

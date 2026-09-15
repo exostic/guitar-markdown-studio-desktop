@@ -35,37 +35,19 @@ export function getDriveConfig() {
 export function setDriveConfig(config) {
   storage(CONFIG_KEY, config);
   storage(TOKEN_KEY, null);
-  tokens = {};
+  token = null;
 }
 
 export function isDesktop() {
   return Boolean(window.gmsDesktop?.googleAuth);
 }
 
-// One token per set of scopes: Drive for the documents, Gmail only when a
-// course is sent by e-mail, so the consent is asked for what is used. A
-// token granted for other scopes (an earlier version of the app) is not
+let token = storage(TOKEN_KEY);
+
+// A token granted for other scopes (an earlier version of the app) is not
 // reused: Google must ask for the new consent.
-let tokens = (() => {
-  const saved = storage(TOKEN_KEY);
-  if (saved?.accessToken && saved.scopes) return { [saved.scopes]: saved };
-  return saved && typeof saved === "object" && !saved.accessToken ? saved : {};
-})();
-
-function tokenValid(scopes) {
-  const token = tokens[scopes];
-  return Boolean(token && token.accessToken && token.expiresAt > Date.now() + 30000);
-}
-
-function rememberToken(scopes, token) {
-  tokens = { ...tokens, [scopes]: token };
-  storage(TOKEN_KEY, tokens);
-}
-
-function forgetToken(scopes) {
-  const { [scopes]: _dropped, ...rest } = tokens;
-  tokens = rest;
-  storage(TOKEN_KEY, tokens);
+function tokenValid() {
+  return token && token.accessToken && token.scopes === SCOPES && token.expiresAt > Date.now() + 30000;
 }
 
 function loadScript(src) {
@@ -82,48 +64,47 @@ function loadScript(src) {
 
 // An access token, asking Google (a popup on the web, the browser on the
 // desktop) only when the cached one has expired.
-export async function getAccessToken(scopes = SCOPES) {
-  if (tokenValid(scopes)) return tokens[scopes].accessToken;
+export async function getAccessToken() {
+  if (tokenValid()) return token.accessToken;
   const config = getDriveConfig();
   if (!config.clientId) throw new Error("Identifiant client Google manquant : renseignez-le dans les réglages Drive.");
   let fresh;
   if (isDesktop()) {
-    const result = await window.gmsDesktop.googleAuth({ clientId: config.clientId, scopes });
+    const result = await window.gmsDesktop.googleAuth({ clientId: config.clientId, scopes: SCOPES });
     if (!result?.accessToken) throw new Error(result?.error ?? "Connexion Google annulée.");
-    fresh = { accessToken: result.accessToken, scopes, expiresAt: Date.now() + (result.expiresIn ?? 3600) * 1000 };
+    fresh = { accessToken: result.accessToken, scopes: SCOPES, expiresAt: Date.now() + (result.expiresIn ?? 3600) * 1000 };
   } else {
     await loadScript("https://accounts.google.com/gsi/client");
     fresh = await new Promise((resolve, reject) => {
       const client = window.google.accounts.oauth2.initTokenClient({
         client_id: config.clientId,
-        scope: scopes,
+        scope: SCOPES,
         callback: response => {
           if (response.error) reject(new Error(response.error_description ?? response.error));
-          else resolve({ accessToken: response.access_token, scopes, expiresAt: Date.now() + Number(response.expires_in ?? 3600) * 1000 });
+          else resolve({ accessToken: response.access_token, scopes: SCOPES, expiresAt: Date.now() + Number(response.expires_in ?? 3600) * 1000 });
         },
         error_callback: error => reject(new Error(error?.message ?? "Connexion Google annulée.")),
       });
-      // Consent only the first time these scopes are asked for.
-      client.requestAccessToken({ prompt: tokens[scopes] ? "" : "consent" });
+      client.requestAccessToken({ prompt: token?.scopes === SCOPES ? "" : "consent" });
     });
   }
-  rememberToken(scopes, fresh);
-  return fresh.accessToken;
+  token = fresh;
+  storage(TOKEN_KEY, token);
+  return token.accessToken;
 }
 
 export function signOut() {
-  const revoke = window.google?.accounts?.oauth2?.revoke;
-  if (revoke) for (const token of Object.values(tokens)) if (token?.accessToken) revoke(token.accessToken, () => {});
-  tokens = {};
+  if (token?.accessToken && window.google?.accounts?.oauth2?.revoke) window.google.accounts.oauth2.revoke(token.accessToken, () => {});
+  token = null;
   storage(TOKEN_KEY, null);
 }
 
-// fetch with a Google token for `scopes`; errors carry the service's name.
-export async function googleFetch(url, options = {}, { scopes = SCOPES, service = "Google Drive" } = {}) {
-  const accessToken = await getAccessToken(scopes);
+async function driveFetch(url, options = {}) {
+  const accessToken = await getAccessToken();
   const response = await fetch(url, { ...options, headers: { ...(options.headers ?? {}), Authorization: `Bearer ${accessToken}` } });
   if (response.status === 401) {
-    forgetToken(scopes);
+    token = null;
+    storage(TOKEN_KEY, null);
     throw new Error("Session Google expirée : réessayez.");
   }
   if (!response.ok) {
@@ -133,12 +114,10 @@ export async function googleFetch(url, options = {}, { scopes = SCOPES, service 
     } catch {
       // no body
     }
-    throw new Error(`${service} : ${response.status}${detail ? ` — ${detail}` : ""}`);
+    throw new Error(`Google Drive : ${response.status}${detail ? ` — ${detail}` : ""}`);
   }
   return response;
 }
-
-const driveFetch = googleFetch;
 
 // Markdown files the app may see, newest first.
 export async function listMarkdownFiles() {

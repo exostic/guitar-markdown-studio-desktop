@@ -385,31 +385,7 @@ button:focus-visible,
   font-weight: 600;
   color: var(--text-dim);
 }
-.email-dialog {
-  width: min(560px, calc(100vw - 2rem));
-}
-.email-dialog textarea {
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 400;
-  line-height: 1.4;
-  padding: 0.45rem 0.6rem;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: var(--surface);
-  color: inherit;
-  resize: vertical;
-}
-.email-attachment {
-  margin: 0 0 0.8rem;
-  font-size: 0.85rem;
-}
-.email-attachment-hint {
-  color: var(--text-dim);
-  font-size: 0.78rem;
-}
-.drive-field input,
-.drive-field textarea {
+.drive-field input {
   font: inherit;
   font-size: 0.85rem;
   font-weight: 400;
