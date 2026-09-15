@@ -21,7 +21,7 @@ E|0---------|------|`);
   assert.equal(plucks[0].beat, 0);
   assert.ok(plucks[1].beat > 0 && plucks[1].beat < 4);
   assert.equal(events.filter(e => e.kind === "mute").length, 1);
-  assert.deepEqual(events.filter(e => e.kind === "cue").map(e => e.cue.measure), [0, 1]);
+  assert.deepEqual(events.filter(e => e.kind === "cue").map(e => [e.cue.measure, e.cue.event]), [[0, 0], [0, 1], [0, 2], [1, 0]]);
   assert.equal(measureBeatsFor("6/8"), 3);
 });
 

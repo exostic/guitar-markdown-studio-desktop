@@ -5,3 +5,4 @@ export { parseChordGrid } from "./parseGrid.js";
 export { parseScale } from "./parseScale.js";
 export { parseTuner } from "./parseTuner.js";
 export * from "./theory.js";
+export { toAlphaTex, translateTab } from "./alphaTex.js";

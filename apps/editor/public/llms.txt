@@ -107,6 +107,11 @@ E|0-------------|--------------|
   `8b10` bend to a written note, `8b` full bend, `8br` bend and release, `10r8` release onto the
   next note, `7~` vibrato, `x` muted note, `(5)` ghost note, `<12>` natural harmonic.
   Playback renders them (pitch glides, legato attacks, vibrato, bell-like harmonics).
+- `grid: 8` on its own line inside the block forces the rhythm grid (cells per bar). Blocks are
+  engraved by alphaTab from an alphaTex translation; rhythm comes from column spacing, so write
+  bars with a character count that is a multiple of the intended subdivision (16 chars = 16ths).
+- `staff: tab` / `staff: partition` / `staff: tab et partition` on its own line inside the block
+  (or as a front matter key) chooses what is drawn: tablature, staff notation, or both.
 - `sound: clean` (or `acoustic`, `distortion`) on its own line inside the block overrides the
   front matter `sound` for this block only — e.g. a clean intro in a distorted song.
 - Rhythm is not quantised: note duration is inferred from the number of events in the bar.
@@ -114,7 +119,7 @@ E|0-------------|--------------|
 
 ### Standard notation — ```partition
 
-Same ASCII syntax as `tab`, rendered as a music staff (VexFlow) instead of a tablature.
+Same ASCII syntax as `tab`, rendered as a music staff instead of a tablature. Both are engraved by alphaTab.
 Always assumes standard tuning.
 
 ### Chord diagrams — ```chords
@@ -286,7 +291,9 @@ printed as a QR code.
 
 A "▶ Écouter" button appears above `tab`, `partition`, `chords`, `grid` and `rhythm` blocks.
 Tempo comes from `tempo`, meter from `time`, pitch from `tuning` and `capo`. Nothing is needed
-in the Markdown to enable it. A speed selector next to each button (25/50/65/80/100 %) slows
+in the Markdown to enable it. While a `tab`/`partition` block plays, the note or chord being
+played turns pink on the engraving. Clicking a note plays it alone and parks a cursor there;
+the play button then starts from that cursor until playback reaches the end of the block. A speed selector next to each button (25/50/65/80/100 %) slows
 that block down for practice; it is a reader-side setting, not something to write in the file.
 
 ## Writing good lessons

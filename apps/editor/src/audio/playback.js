@@ -2,6 +2,7 @@
 // listener handles play buttons, the tempo pill (metronome), tuner strings
 // and single chord diagrams; cues from the scheduler drive `.playing`
 // highlights on measures, diagrams, grid cells and strokes.
+import { alphaTabBeatElements, alphaTabEventAtPoint } from "../alphatab.js";
 import { chordsBlockToEvents, gridToEvents, shapeToEvents } from "./chordEvents.js";
 import { ensureRunning, pluck, setSound } from "./engine.js";
 import { rhythmToEvents } from "./rhythmEvents.js";
@@ -12,7 +13,7 @@ const registry = new Map();
 const transport = createTransport();
 let previewEl = null;
 let activeButton = null;
-let highlighted = null;
+let highlighted = [];
 // Practice speed per block (1 = the front matter tempo), keyed by block id
 // so it survives the re-render that follows every keystroke. The metronome
 // pill keeps the written tempo.
@@ -42,16 +43,26 @@ export function clearRegistry() {
   registry.clear();
 }
 
+// One element, or several when a beat is drawn on more than one staff.
 function clearHighlight() {
-  highlighted?.classList.remove("playing");
-  highlighted = null;
+  for (const element of highlighted) element.classList.remove("playing");
+  highlighted = [];
 }
 
-function setHighlight(element) {
+function setHighlight(target) {
   clearHighlight();
-  if (!element) return;
-  element.classList.add("playing");
-  highlighted = element;
+  const elements = (Array.isArray(target) ? target : [target]).filter(Boolean);
+  for (const element of elements) element.classList.add("playing");
+  highlighted = elements;
+}
+
+// Where ▶ Écouter starts in a notation block: the column the reader
+// clicked last. Shown in pink while nothing plays; cleared when a play
+// reaches the end of the block.
+let cursor = null; // { id, measure, event, beat }
+
+function showCursor() {
+  if (cursor) setHighlight(alphaTabBeatElements(cursor.id, cursor.measure, cursor.event));
 }
 
 export function stopAll() {
@@ -60,6 +71,7 @@ export function stopAll() {
   activeButton?.classList.remove("active");
   activeButton = null;
   previewEl?.querySelectorAll(".playing").forEach(element => element.classList.remove("playing"));
+  showCursor();
 }
 
 export function isPlaying() {
@@ -69,7 +81,7 @@ export function isPlaying() {
 function cueTarget(entry, cue) {
   const host = document.getElementById(entry.id);
   if (!host) return null;
-  if (entry.type === "tab" || entry.type === "partition") return host.querySelector(`[data-measure="${cue.measure}"]`);
+  if (entry.type === "tab" || entry.type === "partition") return alphaTabBeatElements(entry.id, cue.measure, cue.event);
   if (entry.type === "chords") return host.children[cue.item] ?? null;
   if (entry.type === "grid") return host.querySelector(`[data-cell="${cue.row}-${cue.cell}"]`);
   if (entry.type === "rhythm") return host.querySelector(`[data-stroke="${cue.group}-${cue.stroke}"]`);
@@ -96,21 +108,55 @@ function buildEvents(entry, settings) {
 async function startBlock(button, entry, settings) {
   const built = buildEvents(entry, settings);
   if (!built) return;
+  let { events, totalBeats } = built;
+  // Resume from the cursor when it sits in this block.
+  const from = cursor?.id === entry.id ? cursor.beat : 0;
+  if (from > 0) {
+    events = events.filter(event => event.beat >= from - 1e-6).map(event => ({ ...event, beat: event.beat - from }));
+    totalBeats -= from;
+  }
   await ensureRunning();
   setSound(entry.sound ?? settings.sound);
   stopAll();
   const started = transport.play({
-    events: built.events,
+    events,
     bpm: settings.bpm * getSpeed(entry.id),
-    totalBeats: built.totalBeats,
+    totalBeats,
     loop: built.loop,
     id: entry.id,
     onCue: cue => setHighlight(cueTarget(entry, cue)),
-    onEnd: () => stopAll(),
+    onEnd: () => {
+      if (cursor?.id === entry.id) cursor = null;
+      stopAll();
+    },
   });
   if (!started) return;
   activeButton = button;
   button.classList.add("active");
+}
+
+// A click on a note: play that column alone, and leave the cursor on it.
+async function playColumn(entry, { measure, event: eventIndex }, settings) {
+  const built = buildEvents(entry, settings);
+  const cueEvent = built?.events.find(e => e.kind === "cue" && e.cue.measure === measure && e.cue.event === eventIndex);
+  if (!cueEvent) return;
+  const from = cueEvent.beat;
+  cursor = { id: entry.id, measure, event: eventIndex, beat: from };
+  const notes = built.events
+    .filter(e => e.kind !== "cue" && Math.abs(e.beat - from) < 1e-6)
+    .map(e => ({ ...e, beat: 0, duration: Math.min(e.duration ?? 1, 2) }));
+  await ensureRunning();
+  setSound(entry.sound ?? settings.sound);
+  stopAll();
+  transport.play({
+    events: [{ beat: 0, kind: "cue", cue: cueEvent.cue }, ...notes],
+    bpm: settings.bpm * getSpeed(entry.id),
+    totalBeats: 2,
+    loop: false,
+    id: `${entry.id}:column`,
+    onCue: () => showCursor(),
+    onEnd: () => stopAll(),
+  });
 }
 
 async function startMetronome(button, settings) {
@@ -181,5 +227,11 @@ export function bindPlayback({ preview, getSettings }) {
     }
     const item = event.target.closest(".svguitar-item");
     if (item && preview.classList.contains("web-mode")) await strumDiagram(item, getSettings());
+    const host = event.target.closest(".alphatab-host");
+    if (host && preview.classList.contains("web-mode")) {
+      const entry = registry.get(host.id);
+      const column = alphaTabEventAtPoint(host.id, event.clientX, event.clientY);
+      if (entry && column) await playColumn(entry, column, getSettings());
+    }
   });
 }

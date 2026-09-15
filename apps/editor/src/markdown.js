@@ -1,7 +1,7 @@
 import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
 import qrcode from "qrcode-generator";
-import { extractSoundLine } from "./audio/sound.js";
+import { extractBlockOptions } from "./blockOptions.js";
 import {
   diatonicChords,
   isRomanNumeral,
@@ -212,15 +212,16 @@ md.renderer.rules.fence = (tokens, index, options, env, self) => {
 
   if (language === "tab" || language === "partition") {
     const id = `gms-${language}-${blockCounter++}`;
-    // A `sound:` line inside the block picks the instrument for this block
-    // only (e.g. a clean intro in a distorted song).
-    const { body, sound } = extractSoundLine(token.content);
+    // Option lines inside the block: `sound:` picks the instrument for this
+    // block only (a clean intro in a distorted song), `grid:` the rhythm
+    // cells per bar of the engraved rhythm and `staff:` what to draw (tab,
+    // partition, both).
+    const { body, sound, grid, staff } = extractBlockOptions(token.content);
     try {
       const ast = parseAsciiTab(body, { timeSignature: currentTimeSignature, tuning: currentTuning.notes });
       for (const measure of ast.measures) measure.chord = displayChord(measure.chord);
-      pendingRenders.push({ type: language, id, ast, sound });
-      const hostClass = language === "tab" ? "vex-tab-host" : "vex-score-host";
-      return `<figure class="guitar-block ${language}-block">${playButtonHtml(language, id)}<div id="${id}" class="${hostClass}"></div><details><summary>Source ASCII</summary><pre><code>${escapeHtml(body)}</code></pre></details></figure>`;
+      pendingRenders.push({ type: language, id, ast, sound, grid, staff });
+      return `<figure class="guitar-block ${language}-block">${playButtonHtml(language, id)}<div id="${id}" class="alphatab-host"></div><details><summary>Source ASCII</summary><pre><code>${escapeHtml(body)}</code></pre></details></figure>`;
     } catch (error) {
       return blockError(language === "tab" ? "Tablature invalide" : "Partition invalide", error.message, token.content);
     }

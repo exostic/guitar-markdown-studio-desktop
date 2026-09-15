@@ -27,7 +27,7 @@ D  xx0232
 
 ## Arpège principal
 
-Écris la tablature en ASCII. Le rendu de droite est généré en SVG par VexFlow.
+Écris la tablature en ASCII. Le rendu de droite est gravé par alphaTab.
 
 ```tab
     Em              C               G               D

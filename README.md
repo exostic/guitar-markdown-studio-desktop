@@ -1,11 +1,11 @@
-# Guitar Markdown Studio — VexFlow
+# Guitar Markdown Studio
 
 Éditeur de cours de guitare en deux colonnes : Markdown à gauche, rendu vectoriel à droite.
 
 ## Architecture
 
 - `@gms/guitar-markdown` transforme les blocs spécialisés en AST.
-- `@gms/renderer-vexflow` produit les tablatures SVG.
+- les tablatures et partitions sont gravées par [alphaTab](https://www.alphatab.net), à partir d'une traduction alphaTex générée par `@gms/guitar-markdown`.
 - `@gms/renderer-svguitar` produit les diagrammes d'accords SVG.
 - `apps/editor` fournit l'éditeur web Vite.
 - `@gms/exporter-pdf` imprime le rendu avec Puppeteer.
@@ -91,7 +91,9 @@ La lecture audio suit ces techniques : les slides, bends et releases glissent la
 
 Une ligne `sound: clean` (ou `acoustic`, `distortion`) dans un bloc `tab` ou `partition` remplace le `sound` du front matter pour ce bloc seulement, par exemple une intro claire dans un morceau saturé.
 
-Le bloc `partition` accepte exactement la même syntaxe ASCII que `tab`, mais affiche une portée de notation musicale (VexFlow) au lieu d'une tablature.
+Le bloc `partition` accepte exactement la même syntaxe ASCII que `tab`, mais affiche une portée de notation musicale au lieu d'une tablature. Une ligne `staff: tab`, `staff: partition` ou `staff: tab et partition` en tête du bloc choisit ce qui est dessiné ; la même clé `staff` dans le front matter fixe le choix pour tout le document.
+
+Les deux blocs sont gravés par [alphaTab](https://www.alphatab.net) : l'ASCII est traduit en alphaTex (rythme explicite, silences, liaisons, triolets, bends dessinés avec leur courbe, glissés, harmoniques). Le rythme est déduit de l'espacement des colonnes : chaque mesure est calée sur la grille la plus grossière où ses notes tombent juste (noires, croches, triolets de croches, doubles, triples) ; une ligne `grid: 8` en tête du bloc impose le nombre de cases par mesure (8 = croches en 4/4). Une mesure dont l'espacement ne correspond à aucune grille garde l'ordre de ses notes sur une grille fine. Écrivez les mesures avec un nombre de caractères multiple du découpage voulu (16 caractères = doubles-croches en 4/4) pour un rythme fidèle.
 
 ## Diagrammes d'accords
 
@@ -200,7 +202,7 @@ En mode Web, six boutons jouent la note de chaque corde à vide. En mode Livre/P
 
 En mode Web, un bouton **▶ Écouter** apparaît au-dessus des blocs `tab`, `partition`, `chords`, `grid` et `rhythm` :
 
-- tablature / partition : chaque note est jouée par une corde pincée synthétisée (Karplus-Strong, une couleur par corde, caisse de résonance et pièce synthétisées, accords égrenés et jeu légèrement humanisé), au tempo du front matter, la mesure en cours est surlignée ;
+- tablature / partition : chaque note est jouée par une corde pincée synthétisée (Karplus-Strong, une couleur par corde, caisse de résonance et pièce synthétisées, accords égrenés et jeu légèrement humanisé), au tempo du front matter, la note (ou l'accord) en cours passe en rose sur la portée et la tablature ; un clic sur une note la joue seule et y place le curseur, et **▶ Écouter** repart de ce curseur (il s'efface quand la lecture atteint la fin du bloc) ;
 - accords : chaque diagramme est gratté tour à tour (un clic sur un diagramme le gratte seul) ;
 - grille : un accord par mesure (reprises et `xN` respectés, chiffres romains résolus dans la tonalité) ;
 - rythmique : la frappe en boucle avec le métronome, la frappe en cours est surlignée.

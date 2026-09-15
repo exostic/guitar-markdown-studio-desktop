@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { alphaTab } from "@coderline/alphatab-vite";
 import { defineConfig } from "vite";
 
 // GitHub Pages serves project pages under /<repo-name>/, so the Pages build
@@ -37,5 +38,6 @@ function inlineAgentReference() {
 
 export default defineConfig({
   base: process.env.GMS_BASE_PATH || "/",
-  plugins: [inlineAgentReference()],
+  // alphaTab ships its music font and layout worker next to the page.
+  plugins: [inlineAgentReference(), alphaTab()],
 });

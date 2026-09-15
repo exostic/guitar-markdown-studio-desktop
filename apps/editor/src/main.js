@@ -5,15 +5,14 @@ import brandMarkUrl from "./assets/exostic-mark.svg";
 import interFontUrl from "./assets/fonts/inter-latin-wght-normal.woff2?url";
 import { DEFAULT_MARKDOWN } from "./default-content.js";
 import { renderMarkdown, parseFrontMatter, renderQrSvg } from "./markdown.js";
-import { renderTablatureSvg, renderScoreSvg } from "@gms/renderer-vexflow";
 import { renderChordDiagrams } from "@gms/renderer-svguitar";
 import { renderFretboardScale } from "@gms/renderer-fretboard";
 import { parseTuning } from "@gms/guitar-markdown";
 import { bindPlayback, clearRegistry, registerBlock, stopAll, syncSpeedControls } from "./audio/playback.js";
 import { parseSound } from "./audio/sound.js";
+import { destroyAlphaTabBlocks, renderAlphaTabBlock } from "./alphatab.js";
+import { parseStaff } from "./blockOptions.js";
 import LZString from "lz-string";
-import { Bravura } from "../../../node_modules/vexflow/build/esm/src/fonts/bravura.js";
-import { Academico } from "../../../node_modules/vexflow/build/esm/src/fonts/academico.js";
 
 const { compressToEncodedURIComponent, decompressFromEncodedURIComponent } = LZString;
 
@@ -68,7 +67,7 @@ app.innerHTML = `
   <header class="topbar">
     <div class="brand">
       <img class="brand-mark" src="${brandMarkUrl}" alt="" width="34" height="34" />
-      <div><h1>Guitar Markdown Studio</h1><p>Markdown → AST → SVG VexFlow / SVGuitar · <a class="brand-link" href="llms.txt" target="_blank" rel="noopener" title="Référence de la syntaxe, lisible par les agents IA">Doc / agents IA</a></p></div>
+      <div><h1>Guitar Markdown Studio</h1><p>Markdown → AST → alphaTab / SVGuitar · <a class="brand-link" href="llms.txt" target="_blank" rel="noopener" title="Référence de la syntaxe, lisible par les agents IA">Doc / agents IA</a></p></div>
     </div>
     <div class="actions">
       <span id="status">Prêt</span>
@@ -190,40 +189,30 @@ const snippets = {
   link: `[Continuer en ligne](https://exemple.com)`,
 };
 
-const NOTATION_MEASURE_WIDTH = 220;
-// Reference width used only for deciding how many measures fit per row (not
-// the actual rendered measure width) — tuned so the default web-mode width
-// (760px cap minus its padding, ≈704px) yields exactly 4 measures per row.
-const NOTATION_ROW_REFERENCE_WIDTH = 176;
-
-function computeMeasuresPerRow() {
-  // Based on the preview's actual rendered content width, not a viewport
-  // breakpoint — a desktop window is "wide" but the preview area itself can
-  // still be narrow (editor dragged wide, or the compact single-pane view),
-  // and notation should wrap to fit whatever room it actually has.
-  const style = getComputedStyle(preview);
-  const paddingX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
-  const availableWidth = preview.clientWidth - paddingX;
-  return Math.max(1, Math.floor(availableWidth / NOTATION_ROW_REFERENCE_WIDTH));
-}
-
-const PRINT_MODE_MEASURES_PER_ROW = 4;
-
 function drawPending(renders) {
-  // In web mode, notation reflows to fit the preview's actual width instead
-  // of one continuous print-oriented row — additional measures wrap onto new
-  // lines below instead of overflowing. Book and Poster modes use fixed page
-  // widths (not responsive to the window), so a plain fixed cap applies there
-  // instead of the dynamic width measurement.
-  const measuresPerRow = webMode ? computeMeasuresPerRow() : PRINT_MODE_MEASURES_PER_ROW;
+  // Notation is engraved by alphaTab, which wraps bars to the width of its
+  // host on its own (the preview pane in Web mode, the fixed page otherwise).
   clearRegistry();
+  destroyAlphaTabBlocks();
   syncSpeedControls(preview);
   for (const render of renders) {
     registerBlock(render.id, render);
     const target = document.getElementById(render.id);
     if (!target) continue;
-    if (render.type === "tab") renderTablatureSvg(render.ast, target, { measureWidth: NOTATION_MEASURE_WIDTH, height: 130, measuresPerRow });
-    if (render.type === "partition") renderScoreSvg(render.ast, target, { measureWidth: NOTATION_MEASURE_WIDTH, height: 110, measuresPerRow });
+    if (render.type === "tab" || render.type === "partition") {
+      // A `tab` block shows the tablature, a `partition` block the staff;
+      // the front matter `staff` or the block's own `staff:` line overrides.
+      renderAlphaTabBlock(target, render.ast, {
+        staff: render.staff ?? docSettings.staff ?? (render.type === "tab" ? "tabs" : "score"),
+        tempo: docSettings.bpm,
+        tuning: docSettings.tuning,
+        capo: docSettings.capo,
+        timeSignature: docSettings.timeSignature,
+        sound: render.sound ?? docSettings.sound,
+        grid: render.grid,
+      });
+      continue;
+    }
     if (render.type === "chords") renderChordDiagrams(render.ast, target);
     if (render.type === "scale") renderFretboardScale(render.ast, target);
   }
@@ -687,7 +676,7 @@ function applyEditorWidth() {
 // notes), time signature (a 6/8 bar is 3 quarter-beats), tuning, capo,
 // transposition and the instrument sound. Rebuilt on every render; read
 // lazily by the click handler.
-let docSettings = { bpm: 80, timeSignature: "4/4", tuning: parseTuning(""), capo: 0, semitones: 0, sound: "acoustic" };
+let docSettings = { bpm: 80, timeSignature: "4/4", tuning: parseTuning(""), capo: 0, semitones: 0, sound: "acoustic", staff: null };
 
 function refreshDocSettings(data) {
   const transposeMatch = /^([+-]?\d+)$/.exec((data.transpose ?? "").trim());
@@ -698,6 +687,10 @@ function refreshDocSettings(data) {
     capo: Number(/(\d+)/.exec(data.capo ?? "")?.[1] ?? 0),
     semitones: transposeMatch ? Number(transposeMatch[1]) : 0,
     sound: parseSound(data.sound ?? data.guitar ?? data.son) ?? "acoustic",
+    // `staff: tab` / `partition` / `tab et partition`: what every notation
+    // block draws, instead of tab for `tab` and staff for `partition`; a
+    // block's own `staff:` line overrides it.
+    staff: parseStaff(data.staff ?? data.portee ?? data.portée),
   };
 }
 
@@ -1105,24 +1098,41 @@ async function inlineLogo(html) {
   }
 }
 
-const NOTATION_FONT_FACES = `
-@font-face { font-family: "Bravura"; src: url("${Bravura}") format("woff2"); }
-@font-face { font-family: "Academico"; src: url("${Academico}") format("woff2"); }
-`;
+async function fetchDataUrl(url) {
+  const response = await fetch(url);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+// alphaTab draws its music symbols as text in a font it registers as
+// "alphaTab" (Bravura) through a stylesheet of its own; the export has no
+// such stylesheet, so declare the family again with the font embedded.
+async function inlineAlphaTabFontFace() {
+  if (!preview.querySelector(".at-surface")) return "";
+  try {
+    const dataUrl = await fetchDataUrl(new URL("font/Bravura.woff2", document.baseURI));
+    // Prefer alphaTab's own rules (glyph size, overflow) with the font
+    // sources swapped for the embedded one; fall back to a copy of them.
+    const live = [...document.querySelectorAll("style")].map(el => el.textContent).find(text => /font-family:\s*'alphaTab'/.test(text));
+    if (live) return live.replace(/src:\s*url\([^;]*;/, `src: url("${dataUrl}") format("woff2");`);
+    return `@font-face { font-family: "alphaTab"; font-display: block; src: url("${dataUrl}") format("woff2"); }
+.at-surface.at .at { font-family: "alphaTab"; speak: none; font-style: normal; font-weight: normal; font-variant: normal; text-transform: none; line-height: 1; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-size: 36px; overflow: visible !important; }`;
+  } catch {
+    return "";
+  }
+}
 
 async function inlineInterFontFace() {
   // style.css declares Inter Variable with a relative url() that only resolves
   // inside the running app; re-declare it after the stylesheet with the font
   // embedded as a data URI so the standalone export keeps the same typeface.
   try {
-    const response = await fetch(interFontUrl);
-    const blob = await response.blob();
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(blob);
-    });
+    const dataUrl = await fetchDataUrl(interFontUrl);
     return `@font-face { font-family: "Inter Variable"; font-style: normal; font-weight: 100 900; src: url("${dataUrl}") format("woff2-variations"); }`;
   } catch {
     return "";
@@ -1132,11 +1142,13 @@ async function inlineInterFontFace() {
 async function buildWebExportDocument(title) {
   stopAll();
   const interFontFace = await inlineInterFontFace();
+  const alphaTabFontFace = await inlineAlphaTabFontFace();
   // The export ships no JavaScript: play buttons and tuner strings would be
   // dead, so the `export-static` class hides them (CSS) and the tuner falls
   // back to its printable table. Highlight state is stripped as well.
   const exported = preview.cloneNode(true);
   exported.querySelectorAll(".playing, .active").forEach(el => el.classList.remove("playing", "active"));
+  exported.querySelectorAll("[data-alphatex]").forEach(el => delete el.dataset.alphatex);
   const html = `<!doctype html>
 <html lang="fr">
 <head>
@@ -1144,7 +1156,7 @@ async function buildWebExportDocument(title) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title || "Cours de guitare")}</title>
 <meta name="theme-color" content="#0b012e">
-<style>${NOTATION_FONT_FACES}${styleCssText}${interFontFace}</style>
+<style>${styleCssText}${interFontFace}${alphaTabFontFace}</style>
 </head>
 <body style="background:#0b012e; margin:0; padding:1.5rem 0.75rem;">
 <article class="course-page web-mode export-static" style="margin:0 auto;">${exported.innerHTML}</article>

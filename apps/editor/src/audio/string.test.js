@@ -66,8 +66,8 @@ test("renderPluck : juste à moins de 3 cents sur toute la tessiture", () => {
 });
 
 test("renderPluck : normalisée, finie, et une corde grave sonne plus longtemps", () => {
-  const plain = renderPluck({ midi: 64, string: 1, sampleRate });
-  const wound = renderPluck({ midi: 64, string: 4, sampleRate });
+  const plain = renderPluck({ midi: 64, string: 1, sampleRate, random: seeded(3) });
+  const wound = renderPluck({ midi: 64, string: 4, sampleRate, random: seeded(3) });
   for (const data of [plain, wound]) {
     assert.ok(data.every(Number.isFinite));
     assert.ok(Math.max(...data.slice(0, 4096).map(Math.abs)) <= 0.8 + 1e-6);

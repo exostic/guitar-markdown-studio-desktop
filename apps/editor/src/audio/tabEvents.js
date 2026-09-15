@@ -72,7 +72,6 @@ export function tabToEvents(ast, { tuning, capo = 0, timeSignature } = {}) {
   const events = [];
   ast.measures.forEach(measure => {
     const base = measure.index * measureBeats;
-    events.push({ beat: base, kind: "cue", cue: { measure: measure.index } });
     const incoming = new Map();
     const outgoing = new Map();
     const ornaments = new Map();
@@ -90,6 +89,8 @@ export function tabToEvents(ast, { tuning, capo = 0, timeSignature } = {}) {
 
     measure.events.forEach((event, eventIndex) => {
       const onset = base + event.offset * measureBeats;
+      // One cue per column, so the note (or chord) being played can be shown.
+      events.push({ beat: onset, kind: "cue", cue: { measure: measure.index, event: eventIndex, beat: onset } });
       let muted = false;
       let order = 0;
       const positions = [...event.positions].sort((a, b) => b.string - a.string);

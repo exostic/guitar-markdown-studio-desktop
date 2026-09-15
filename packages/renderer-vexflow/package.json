@@ -1,9 +1,0 @@
-{
-  "name": "@gms/renderer-vexflow",
-  "version": "0.1.0",
-  "type": "module",
-  "exports": "./src/index.js",
-  "dependencies": {
-    "vexflow": "^5.0.0"
-  }
-}

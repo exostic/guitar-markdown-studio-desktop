@@ -1207,6 +1207,18 @@ pre {
   display: none;
 }
 
+.alphatab-host {
+  min-height: 3rem;
+  overflow-x: auto;
+}
+.alphatab-host .at-surface {
+  margin: 0 auto;
+}
+/* Note or chord being played: its heads and tab numbers turn pink. */
+.at-surface g.playing,
+.at-surface g.playing * {
+  fill: #ec4899 !important;
+}
 .block-toolbar {
   display: flex;
   justify-content: flex-end;

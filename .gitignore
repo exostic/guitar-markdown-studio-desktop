@@ -10,3 +10,7 @@ yarn-debug.log*
 yarn-error.log*
 .env
 .env.local
+
+# alphaTab copies its music font and SoundFont here at build time
+apps/editor/public/font/
+apps/editor/public/soundfont/
