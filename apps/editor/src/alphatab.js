@@ -270,6 +270,9 @@ export async function renderAlphaTabBlock(target, ast, options) {
   api.renderStarted.on(() => {
     const height = target.getBoundingClientRect().height;
     if (height > 0) target.style.minHeight = `${height}px`;
+    // Not rendered again until this pass is done: a re-engraving after a
+    // width change must be waited for like the first one (print, Poster).
+    delete target.dataset.rendered;
   });
   api.postRenderFinished.on(() => {
     removeCreditLine(target);

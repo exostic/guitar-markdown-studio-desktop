@@ -39,6 +39,14 @@ const LANDSCAPE_MARGIN_PX = 16;
 const LANDSCAPE_CONTENT_HEIGHT_MM = PAGE_WIDTH_MM - (2 * LANDSCAPE_MARGIN_PX) / MM_TO_PX;
 const PREVIEW_GUTTER_PX = 64;
 const PAGE_FIT_MIN_SCALE = 0.35;
+// Poster without any landscapebreak / columnbreak marker: the content is
+// flowed into columns by itself. Columns per page (front matter
+// `poster-columns` overrides), and how full a column may get in natural
+// height before the next one starts: 1 / POSTER_FILL is the most a column
+// is then shrunk to fit.
+const POSTER_COLUMNS_DEFAULT = 3;
+const POSTER_FILL = 0.85;
+const POSTER_FILL_MAX = 0.7;
 const RHYTHM_FIT_MIN_SCALE = 0.4;
 const GRID_FIT_MIN_SCALE = 0.45;
 const app = document.querySelector("#app");
@@ -752,7 +760,9 @@ function buildLandscapeStructure() {
   // never appear in the final DOM. `preview` itself stays attached (but
   // hidden) so getElementById lookups in drawPending keep working on the next
   // render pass, before its content has been redistributed into page boxes.
-  const pages = splitByMarker([...preview.childNodes], "landscape-page-break");
+  const nodes = [...preview.childNodes];
+  hasPosterMarkers = nodes.some(node => node.nodeType === 1 && (node.classList.contains("landscape-page-break") || node.classList.contains("column-break")));
+  const pages = splitByMarker(nodes, "landscape-page-break");
   preview.classList.remove("landscape-fit");
   preview.innerHTML = "";
   preview.style.display = "none";
@@ -760,27 +770,123 @@ function buildLandscapeStructure() {
   previewWrapper.append(preview);
   previewWrapper.style.height = "";
 
+  if (!hasPosterMarkers) {
+    // Everything in the first of N columns for now, at the width a column
+    // will have: once the notation is engraved at that width, the content
+    // is measured and flowed into columns and pages (autoPaginatePoster).
+    // Measured in the second column when there is one: it is the narrower
+    // kind (left padding and rule), so nothing measured there can come out
+    // taller once moved to the first.
+    const columns = Array.from({ length: docSettings.posterColumns }, () => []);
+    columns[Math.min(1, columns.length - 1)] = pages.flat();
+    previewWrapper.append(landscapePage(columns));
+    return;
+  }
   pages.forEach(pageNodes => {
-    const pageBox = document.createElement("article");
-    pageBox.className = "course-page landscape-fit";
-
-    const columnsHost = document.createElement("div");
-    columnsHost.className = "landscape-columns";
-    splitByMarker(pageNodes, "column-break").forEach(nodes => {
-      const column = document.createElement("div");
-      column.className = "landscape-column";
-      const inner = document.createElement("div");
-      inner.className = "landscape-column-inner";
-      nodes.forEach(node => inner.append(node));
-      column.append(inner);
-      columnsHost.append(column);
-    });
-    pageBox.append(columnsHost);
-    previewWrapper.append(pageBox);
+    previewWrapper.append(landscapePage(splitByMarker(pageNodes, "column-break")));
   });
 }
 
-function rescaleLandscapeColumns() {
+function landscapePage(columns) {
+  const pageBox = document.createElement("article");
+  pageBox.className = "course-page landscape-fit";
+  const columnsHost = document.createElement("div");
+  columnsHost.className = "landscape-columns";
+  columns.forEach(nodes => {
+    const column = document.createElement("div");
+    column.className = "landscape-column";
+    const inner = document.createElement("div");
+    inner.className = "landscape-column-inner";
+    nodes.forEach(node => inner.append(node));
+    column.append(inner);
+    columnsHost.append(column);
+  });
+  pageBox.append(columnsHost);
+  return pageBox;
+}
+
+// Resolves once every notation block of the view is engraved: alphaTab
+// lays out asynchronously, and measuring or printing before it is done
+// would see blank blocks. Gives up after a while so a block alphaTab
+// cannot draw never blocks anything.
+function notationSettled(timeoutMs = 10_000) {
+  return new Promise(resolve => {
+    const started = performance.now();
+    const check = () => {
+      if (!previewWrapper.querySelector(".alphatab-host:not([data-rendered])") || performance.now() - started > timeoutMs) resolve();
+      else setTimeout(check, 50);
+    };
+    check();
+  });
+}
+
+// Poster without markers: flows the content of the single measuring column
+// (see buildLandscapeStructure) into columns and pages. Each top-level
+// block is kept whole; a column takes blocks until their natural height
+// reaches the page height divided by POSTER_FILL, so it is shrunk by at
+// most that; a heading never ends a column. Every block is measured at its
+// final width already, so nothing reflows when it moves.
+let hasPosterMarkers = false;
+let posterLayoutToken = 0;
+let posterLayoutReady = Promise.resolve();
+
+function autoPaginatePoster() {
+  const token = ++posterLayoutToken;
+  posterLayoutReady = (async () => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await notationSettled();
+    await document.fonts.ready;
+    if (token !== posterLayoutToken || !fitToPage) return;
+    const measuring = [...previewWrapper.querySelectorAll(".course-page.landscape-fit .landscape-column-inner")].find(inner => inner.childNodes.length);
+    if (!measuring) return;
+    const nodes = [...measuring.childNodes].filter(node => node.nodeType === 1 || (node.nodeType === 3 && node.textContent.trim()));
+    if (!nodes.length) return;
+    const capacity = (LANDSCAPE_CONTENT_HEIGHT_MM * MM_TO_PX) / POSTER_FILL;
+    // Natural sizes, at the column's own width (the measuring page was not
+    // fitted): a column is only ever widened afterwards, which makes nothing
+    // taller.
+    const base = measuring.getBoundingClientRect().top;
+    const tops = nodes.map(node => (node.nodeType === 1 ? node.getBoundingClientRect().top : base) - base);
+    const total = measuring.scrollHeight;
+    const heights = tops.map((top, index) => (index + 1 < tops.length ? tops[index + 1] : total) - top);
+    const isHeading = node => node.nodeType === 1 && /^H[1-6]$/.test(node.tagName);
+    // A block that does not fit starts a new column — unless the column is
+    // still mostly empty and taking it keeps the shrink within POSTER_FILL_MAX
+    // (a tall tab after a short grid: better slightly smaller than a column
+    // left almost blank).
+    const stretch = (LANDSCAPE_CONTENT_HEIGHT_MM * MM_TO_PX) / POSTER_FILL_MAX;
+    const columns = [[]];
+    let used = 0;
+    nodes.forEach((node, index) => {
+      const height = Math.max(0, heights[index]);
+      const fits = used + height <= capacity || (used < capacity * 0.4 && used + height <= stretch);
+      if (columns.at(-1).length && !fits) {
+        // A heading left at the bottom moves along with what it titles.
+        const carried = [];
+        while (columns.at(-1).length && isHeading(columns.at(-1).at(-1))) carried.unshift(columns.at(-1).pop());
+        columns.push(carried);
+        used = carried.reduce((sum, item) => sum + heights[nodes.indexOf(item)], 0);
+      }
+      columns.at(-1).push(node);
+      used += height;
+    });
+    if (token !== posterLayoutToken || !fitToPage) return;
+    const perPage = docSettings.posterColumns;
+    previewWrapper.querySelectorAll(".course-page.landscape-fit").forEach(pageBox => pageBox.remove());
+    for (let i = 0; i < columns.length; i += perPage) {
+      const pageColumns = columns.slice(i, i + perPage);
+      while (pageColumns.length < perPage) pageColumns.push([]);
+      previewWrapper.append(landscapePage(pageColumns));
+    }
+    await settleLandscapePages(token);
+  })();
+  return posterLayoutReady;
+}
+
+// `noGrow`: a column keeps at most the scale it had — used on the passes
+// that follow a re-engraving, since a scale that grew would narrow the
+// column again and make its notation taller than what was just measured.
+function rescaleLandscapeColumns({ noGrow = false } = {}) {
   const usableHeightPx = LANDSCAPE_CONTENT_HEIGHT_MM * MM_TO_PX;
   document.querySelectorAll(".course-page.landscape-fit").forEach(pageBox => {
     // Measure at the true physical landscape width (297mm), not whatever width the
@@ -797,6 +903,7 @@ function rescaleLandscapeColumns() {
       // since clientWidth includes padding and inner (a normal-flow child)
       // doesn't render inside that padding.
       const columnWidthPx = inner.getBoundingClientRect().width;
+      const ceiling = noGrow && inner.dataset.scale ? Number(inner.dataset.scale) : 1;
       let naturalHeight = inner.scrollHeight;
       // Widening the box to fill the column after scaling (so it doesn't
       // look like it shrunk in both dimensions) can itself change how the
@@ -805,8 +912,11 @@ function rescaleLandscapeColumns() {
       // a few times until it settles instead of overflowing the column's
       // overflow:hidden bound by a residual few pixels and clipping content.
       for (let i = 0; i < 5; i += 1) {
-        const scale = Math.max(PAGE_FIT_MIN_SCALE, Math.min(1, usableHeightPx / naturalHeight));
+        // A couple of pixels of slack: the transform rounds, and a column
+        // cut by its overflow:hidden bound loses a descender or a beam.
+        const scale = Math.max(PAGE_FIT_MIN_SCALE, Math.min(ceiling, (usableHeightPx - 2) / naturalHeight));
         inner.style.transform = `scale(${scale})`;
+        inner.dataset.scale = String(scale);
         // A fixed pixel width, not a percentage — a percentage gets
         // re-resolved against the column's width wherever this renders next
         // (a print/PDF pass in particular can resolve it a pixel or two
@@ -894,23 +1004,25 @@ function applyPageFit() {
   }
 
   buildLandscapeStructure();
-  rescaleLandscapeColumns();
-  fitPosterPageToViewport();
-  // Content images load asynchronously — if one hasn't finished yet at
-  // measurement time, the column looks shorter than it truly is, so the
-  // computed scale ends up too generous and whatever comes after the image
-  // (e.g. a later section) overflows the fixed-height column and gets
-  // clipped once the image actually expands. Re-measure once everything is
-  // settled to correct for that.
-  const pendingImages = [...previewWrapper.querySelectorAll("img")]
-    .filter(img => !img.complete)
-    .map(img => new Promise(resolve => {
-      img.addEventListener("load", resolve, { once: true });
-      img.addEventListener("error", resolve, { once: true });
-    }));
-  Promise.all([document.fonts.ready, ...pendingImages]).then(() => {
-    if (!fitToPage) return;
+  if (hasPosterMarkers) {
     rescaleLandscapeColumns();
+    fitPosterPageToViewport();
+    posterLayoutReady = settleLandscapePages(++posterLayoutToken);
+  } else {
+    autoPaginatePoster();
+  }
+}
+
+// Fits the landscape columns once their content has its final size: fonts
+// and images arrive asynchronously, and so does the notation — which is
+// also re-engraved whenever the fit widens a column, so fit, let that
+// start, wait for it and fit once more. A stale token (another render
+// since) stops it.
+async function settleLandscapePages(token) {
+  let first = true;
+  const settle = () => {
+    rescaleLandscapeColumns({ noGrow: !first });
+    first = false;
     fitPosterPageToViewport();
     // The column width this correction settles on can differ from the one
     // fitChordGrids/fitRhythmBlocks already shrank text to fit — re-run
@@ -918,7 +1030,23 @@ function applyPageFit() {
     // stale width can end up overflowing its cell with no further check.
     fitChordGrids();
     fitRhythmBlocks();
-  });
+    applyZoomScale();
+  };
+  const pendingImages = [...previewWrapper.querySelectorAll("img")]
+    .filter(img => !img.complete)
+    .map(img => new Promise(resolve => {
+      img.addEventListener("load", resolve, { once: true });
+      img.addEventListener("error", resolve, { once: true });
+    }));
+  await Promise.all([document.fonts.ready, ...pendingImages]);
+  for (let pass = 0; pass < 2; pass += 1) {
+    if (token !== posterLayoutToken || !fitToPage) return;
+    settle();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await notationSettled();
+  }
+  if (token !== posterLayoutToken || !fitToPage) return;
+  settle();
 }
 
 function applyCompactMode() {
@@ -1025,6 +1153,7 @@ function refreshDocSettings(data) {
     // from another SoundFont first, the app's banks filling in what it lacks.
     samples: !/^(off|non|false|0|synth)$/i.test((data.samples ?? "").trim()),
     soundfont: (data.soundfont ?? "").trim() || null,
+    posterColumns: Math.min(4, Math.max(1, Number(/(\d)/.exec(data["poster-columns"] ?? "")?.[1]) || POSTER_COLUMNS_DEFAULT)),
   };
   setSampler({ enabled: docSettings.samples, urls: docSettings.soundfont ? [new URL(docSettings.soundfont, document.baseURI).href, ...DEFAULT_SOUNDFONT_URLS] : DEFAULT_SOUNDFONT_URLS });
 }
@@ -1414,19 +1543,11 @@ async function prepareHeaderQr() {
   status.textContent = "";
 }
 
-// Resolves once every notation block of the preview is engraved: alphaTab
-// lays out asynchronously after `update()`, and printing before it is
-// done would leave the tabs and staves blank. Gives up after a while so a
-// block alphaTab cannot draw never blocks the print.
-function previewSettled(timeoutMs = 10_000) {
-  return new Promise(resolve => {
-    const started = performance.now();
-    const check = () => {
-      if (!preview.querySelector(".alphatab-host:not([data-rendered])") || performance.now() - started > timeoutMs) resolve();
-      else setTimeout(check, 50);
-    };
-    check();
-  });
+// Before printing: every notation block engraved, and the Poster pages laid
+// out when they are flowed automatically.
+async function previewSettled() {
+  await notationSettled();
+  await posterLayoutReady;
 }
 
 // Prints (or exports to PDF on the desktop) with the notation blocks

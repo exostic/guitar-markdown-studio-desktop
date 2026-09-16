@@ -323,7 +323,7 @@ Blocs sans contenu, à utiliser seuls sur leur propre ligne :
 
 - ` ```pagebreak ``` ` : saut de page.
 - ` ```columnbreak ``` ` : saut de colonne (dans une mise en page à colonnes).
-- ` ```landscapebreak ``` ` : saut de page en orientation paysage.
+- ` ```landscapebreak ``` ` : saut de page en orientation paysage (mode Poster). Sans aucun `landscapebreak` ni `columnbreak` dans le document, le mode Poster répartit le contenu de lui-même : chaque bloc (titre, paragraphe, tablature, grille…) reste entier, les colonnes se remplissent dans l'ordre jusqu'à la hauteur de la page (réduites de 15 % au plus, un peu plus si une colonne resterait presque vide), un titre n'est jamais seul en bas de colonne, et les pages A4 paysage s'enchaînent par trois colonnes. `poster-columns: 2` (de 1 à 4) dans le front matter change le nombre de colonnes. Dès qu'un marqueur est présent, la répartition est entièrement manuelle, comme avant. Le mode Livre n'est pas concerné.
 - ` ```columns ``` ` … ` ```column ``` ` … ` ```endcolumns ``` ` : ouvre une section à colonnes, `column` sépare chaque colonne, `endcolumns` referme la section.
 - ` ```zoom 0.8 ``` ` … ` ```endzoom ``` ` : réduit (ou agrandit) l'échelle du contenu entre les deux marqueurs. Le facteur (`0.1` à `3`) est optionnel, `0.8` par défaut.
 
