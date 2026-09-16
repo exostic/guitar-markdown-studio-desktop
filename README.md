@@ -242,7 +242,7 @@ gcloud run deploy gms-shortlink --source services/shortlink --region europe-west
   --set-env-vars ALLOWED_ORIGINS=https://gms.exostic.com,PUBLIC_BASE_URL=https://l.exostic.com
 ```
 
-`gcloud run deploy` affiche l'URL du service (`https://gms-shortlink-….run.app`). Pour des liens plus courts sur votre domaine, mappez un sous-domaine : `gcloud beta run domain-mappings create --service gms-shortlink --domain l.exostic.com --region europe-west1`, puis créez chez votre registrar l'enregistrement DNS indiqué (CNAME vers `ghs.googlehosted.com`). Sans domaine propre, mettez l'URL `run.app` dans `PUBLIC_BASE_URL`.
+`gcloud run deploy` affiche l'URL du service (`https://gms-shortlink-….run.app`). Le service de gms.exostic.com est déployé ainsi dans le projet de l'identifiant OAuth, région `europe-west1`, base Firestore `eur3` : `https://gms-shortlink-1080726648569.europe-west1.run.app`, adresse transmise au build par la variable GitHub `SHORTLINK_API`. Pour des liens plus courts sur votre domaine, mappez un sous-domaine : `gcloud beta run domain-mappings create --service gms-shortlink --domain l.exostic.com --region europe-west1`, puis créez chez votre registrar l'enregistrement DNS indiqué (CNAME vers `ghs.googlehosted.com`). Sans domaine propre, mettez l'URL `run.app` dans `PUBLIC_BASE_URL`.
 
 Ensuite, indiquez l'adresse du service à l'application : soit dans **Fichier › Réglages Google…**, champ *Service de liens courts* (réglage local au navigateur), soit pour tout le monde au build, par la variable `VITE_SHORTLINK_API` (dans GitHub, *Settings › Secrets and variables › Actions › Variables*, créez `SHORTLINK_API` avec l'adresse : le workflow Pages la transmet). Si le service ne répond pas, l'application retombe sur TinyURL.
 
