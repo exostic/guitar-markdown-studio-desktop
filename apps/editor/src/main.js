@@ -1038,7 +1038,9 @@ function applyEditorWidth() {
   // window — the editor absorbs the squeeze instead, shrinking first and then
   // hiding entirely (behind the floating edit-toggle button) once there's no
   // usable width left for it.
-  if (compactQuery.matches || workspace.classList.contains("editor-overlay")) return;
+  // A view-only link shows the preview alone: the editor stays hidden
+  // whatever the mode (Book and Poster snap the editor width on entry).
+  if (viewOnly || compactQuery.matches || workspace.classList.contains("editor-overlay")) return;
   const available = workspace.clientWidth - RESIZER_WIDTH - PREVIEW_MIN_VISIBLE_WIDTH;
   if (available < EDITOR_HIDE_THRESHOLD) {
     editorPane.hidden = true;
