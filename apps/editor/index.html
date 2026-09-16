@@ -7,6 +7,25 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <title>Guitar Markdown Studio</title>
   <meta name="description" content="Éditeur de cours de guitare en Markdown : tablatures, diagrammes d'accords, gammes, grilles, paroles, théorie et lecture audio. Documentation de la syntaxe pour les agents IA : /llms.txt" />
+  <meta name="application-name" content="Guitar Markdown Studio" />
+  <meta property="og:site_name" content="Guitar Markdown Studio" />
+  <meta property="og:title" content="Guitar Markdown Studio" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://gms.exostic.com/" />
+  <meta property="og:description" content="Éditeur de cours de guitare en Markdown : tablatures, diagrammes d'accords, gammes, grilles, paroles, théorie et lecture audio." />
+  <link rel="canonical" href="https://gms.exostic.com/" />
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Guitar Markdown Studio",
+      "url": "https://gms.exostic.com/",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Web",
+      "description": "Éditeur de cours de guitare en Markdown : tablatures, diagrammes d'accords, gammes, grilles, paroles, théorie et lecture audio.",
+      "publisher": { "@type": "Organization", "name": "Exostic", "url": "https://exostic.com/" }
+    }
+  </script>
   <link rel="alternate" type="text/plain" href="llms.txt" title="Syntax reference for AI agents (llms.txt)" />
   <style>
     /* Reference for AI agents, inlined from public/llms.txt at build time.
@@ -15,7 +34,15 @@
   </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <!-- Static header, replaced by the application once loaded: the name is
+         visible to anything reading the page without JavaScript. -->
+    <header class="static-brand">
+      <h1>Guitar Markdown Studio</h1>
+      <p>Éditeur de cours de guitare en Markdown : tablatures, diagrammes d'accords, gammes, grilles, paroles, théorie et lecture audio. Un service proposé par Exostic.</p>
+      <p><a href="confidentialite/">Règles de confidentialité</a> · <a href="conditions/">Conditions d'utilisation</a> · <a href="llms.txt">Documentation</a></p>
+    </header>
+  </div>
   <noscript>
     <p>Guitar Markdown Studio est un éditeur de cours de guitare en Markdown et nécessite JavaScript.</p>
     <p>The syntax reference (for humans and AI agents) is available at <a href="llms.txt">/llms.txt</a>.

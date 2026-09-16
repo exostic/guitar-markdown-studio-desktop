@@ -110,6 +110,23 @@ button:focus-visible,
   grid-template-rows: auto auto 1fr;
   background: var(--bg);
 }
+/* Name shown while the script loads (and to crawlers), swapped for the real header. */
+.static-brand {
+  padding: 1.2rem 1.5rem;
+  color: #fff;
+  font-family: system-ui, sans-serif;
+}
+.static-brand h1 {
+  margin: 0 0 0.4rem;
+  font-size: 1.4rem;
+}
+.static-brand p {
+  margin: 0.2rem 0;
+  font-size: 0.9rem;
+}
+.static-brand a {
+  color: inherit;
+}
 .topbar {
   padding: 0.7rem 1.1rem;
   background: var(--bg);
