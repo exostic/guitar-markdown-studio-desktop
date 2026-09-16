@@ -39,3 +39,21 @@ test("zoneForNote prend la zone la plus proche hors plage", () => {
   assert.equal(zoneForNote(zones, 55), zones[0]);
   assert.equal(zoneForNote(zones, 80), zones[1]);
 });
+
+test("la banque acoustique de l'application : une folk mono sur le programme 25, toute la tessiture", () => {
+  const bankFile = readFileSync(new URL("../../public/samples/acoustic-steel.sf2", import.meta.url));
+  const bank = parseSoundFont(bankFile.buffer.slice(bankFile.byteOffset, bankFile.byteOffset + bankFile.byteLength));
+  assert.deepEqual(bank.presets, [{ name: "Acoustic Guitar", program: 25, bank: 0 }]);
+  const zones = bank.programZones(25);
+  assert.equal(zones.length, 18, "une zone par note échantillonnée, sans doublon stéréo");
+  for (let midi = 40; midi <= 88; midi++) {
+    const zone = zoneForNote(zones, midi);
+    assert.ok(zone, `note ${midi}`);
+    assert.ok(Math.abs(midi - zone.rootKey) <= 12, `note ${midi} jouée depuis ${zone.rootKey}`);
+    assert.equal(zone.sampleRate, 44100);
+    assert.ok(zone.end - zone.start > 4 * 44100, "au moins 4 s de son");
+  }
+  const data = bank.zoneSamples(zoneForNote(zones, 52));
+  assert.ok(data.some(v => Math.abs(v) > 0.1), "des échantillons non nuls");
+  assert.equal(bank.programZones(27).length, 0, "pas d'électrique : elle vient de la banque General MIDI");
+});

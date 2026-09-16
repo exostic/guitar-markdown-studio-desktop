@@ -61,9 +61,11 @@ export async function ensureRunning() {
 // bank has loaded; the synth stays the fallback.
 let samplerEnabled = true;
 
-export function setSampler({ enabled = true, url = null } = {}) {
+// `urls`: the SoundFonts to play from, in order of preference (a program is
+// taken from the first bank that has it).
+export function setSampler({ enabled = true, urls = [] } = {}) {
   samplerEnabled = enabled;
-  if (enabled && url) loadSampler(url);
+  if (enabled && urls.length) loadSampler(urls);
 }
 
 export function setSound(name) {

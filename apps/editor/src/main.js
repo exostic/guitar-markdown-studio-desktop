@@ -972,10 +972,13 @@ function applyEditorWidth() {
 // notes), time signature (a 6/8 bar is 3 quarter-beats), tuning, capo,
 // transposition and the instrument sound. Rebuilt on every render; read
 // lazily by the click handler.
-// The General MIDI bank alphaTab ships, copied next to the page by its
-// vite plugin; fetched once, in the background, at startup.
-const DEFAULT_SOUNDFONT_URL = new URL("soundfont/sonivox.sf2", document.baseURI).href;
-setSampler({ enabled: true, url: DEFAULT_SOUNDFONT_URL });
+// The app's banks, fetched once, in the background, at startup: a sampled
+// steel-string acoustic (see public/samples/README.md) for the acoustic
+// sound, then the General MIDI bank alphaTab ships (copied next to the page
+// by its vite plugin) for the electric guitar and any program the first
+// bank lacks.
+const DEFAULT_SOUNDFONT_URLS = ["samples/acoustic-steel.sf2", "soundfont/sonivox.sf2"].map(path => new URL(path, document.baseURI).href);
+setSampler({ enabled: true, urls: DEFAULT_SOUNDFONT_URLS });
 
 let docSettings = { bpm: 80, timeSignature: "4/4", tuning: parseTuning(""), capo: 0, semitones: 0, sound: "acoustic", staff: null };
 
@@ -993,11 +996,11 @@ function refreshDocSettings(data) {
     // block's own `staff:` line overrides it.
     staff: parseStaff(data.staff ?? data.portee ?? data.portée),
     // `samples: off` keeps the synthesized string; `soundfont: <url>` plays
-    // another SoundFont than the one shipped with the app.
+    // from another SoundFont first, the app's banks filling in what it lacks.
     samples: !/^(off|non|false|0|synth)$/i.test((data.samples ?? "").trim()),
     soundfont: (data.soundfont ?? "").trim() || null,
   };
-  setSampler({ enabled: docSettings.samples, url: docSettings.soundfont ? new URL(docSettings.soundfont, document.baseURI).href : DEFAULT_SOUNDFONT_URL });
+  setSampler({ enabled: docSettings.samples, urls: docSettings.soundfont ? [new URL(docSettings.soundfont, document.baseURI).href, ...DEFAULT_SOUNDFONT_URLS] : DEFAULT_SOUNDFONT_URLS });
 }
 
 // A note clicked in the preview: select its fret in the Markdown and
