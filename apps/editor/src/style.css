@@ -1562,6 +1562,21 @@ pre {
 .at-bar-highlight.playing {
   display: block;
 }
+/* Playback cursor: a line on the column being played, sliding to the next
+   one (alphatab.js animates its `left`). */
+.at-beat-cursor {
+  position: absolute;
+  display: none;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: #ec4899;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.at-beat-cursor.playing {
+  display: block;
+}
 /* Note or chord being played: its heads and tab numbers turn pink. */
 .at-surface g.playing,
 .at-surface g.playing * {

@@ -2,7 +2,7 @@
 // listener handles play buttons, the tempo pill (metronome), tuner strings
 // and single chord diagrams; cues from the scheduler drive `.playing`
 // highlights on measures, diagrams, grid cells and strokes.
-import { alphaTabBarHighlight, alphaTabBeatElements, alphaTabEventAtPoint } from "../alphatab.js";
+import { alphaTabBarHighlight, alphaTabBeatElements, alphaTabCursor, alphaTabCursorPause, alphaTabCursorResume, alphaTabEventAtPoint } from "../alphatab.js";
 import { isMicTunerRunning, startMicTuner, stopMicTuner } from "./micTuner.js";
 import { chordsBlockToEvents, gridToEvents, shapeToEvents } from "./chordEvents.js";
 import { ensureRunning, pluck, setSound } from "./engine.js";
@@ -138,15 +138,27 @@ async function startBlock(button, entry, settings) {
   await ensureRunning();
   setSound(entry.sound ?? settings.sound);
   stopAll();
+  const bpm = blockSettings(entry, settings).bpm * getSpeed(entry.id);
+  const notation = entry.type === "tab" || entry.type === "partition";
+  // For the moving cursor of a notation block: where each column's cue goes
+  // next, and how long it has to get there.
+  const cues = notation ? events.filter(event => event.kind === "cue") : [];
+  const slides = new Map(cues.map((event, index) => {
+    const next = cues[index + 1] ?? null;
+    const beats = (next ? next.beat : totalBeats) - event.beat;
+    return [`${event.cue.measure}:${event.cue.event}`, { next: next?.cue ?? null, durationMs: (beats * 60000) / bpm }];
+  }));
   const started = transport.play({
     events,
-    bpm: blockSettings(entry, settings).bpm * getSpeed(entry.id),
+    bpm,
     totalBeats,
     loop: built.loop,
     id: entry.id,
     onCue: cue => {
       const target = cueTarget(entry, cue);
       setHighlight(target);
+      const slide = slides.get(`${cue.measure}:${cue.event}`);
+      if (slide) alphaTabCursor(entry.id, cue.measure, cue.event, slide.next, slide.durationMs);
       onPlaying?.(entry, cue, (Array.isArray(target) ? target : [target]).filter(Boolean));
     },
     onEnd: () => {
@@ -167,10 +179,12 @@ export function togglePlayPause() {
   if (transport.isPlaying() && activeButton?.classList.contains("play-button")) {
     if (transport.isPaused()) {
       transport.resume();
+      alphaTabCursorResume(activeButton.dataset.target);
       activeButton.classList.remove("paused");
       activeButton.textContent = PLAY_LABEL;
     } else {
       transport.pause();
+      alphaTabCursorPause(activeButton.dataset.target);
       activeButton.classList.add("paused");
       activeButton.textContent = PAUSED_LABEL;
     }

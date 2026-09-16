@@ -74,12 +74,75 @@ export function alphaTabBarHighlight(id, measureIndex) {
 // or when the event has no beat of its own.
 export function alphaTabBeatElements(id, measureIndex, eventIndex) {
   const instance = instances.get(id);
-  if (!instance) return [];
-  const beatIndex = instance.beats[measureIndex]?.[eventIndex];
-  if (beatIndex === null || beatIndex === undefined) return [];
-  const beat = instance.api.score?.tracks[0]?.staves[0]?.bars[measureIndex]?.voices[0]?.beats[beatIndex];
+  const beat = instance ? beatAt(instance, measureIndex, eventIndex) : null;
   if (!beat) return [];
   return [...instance.target.querySelectorAll(`.at-surface g.b${beat.id}`)];
+}
+
+// The alphaTab beat an ASCII column became, or null (a column with no beat
+// of its own, an unrendered block).
+function beatAt(instance, measureIndex, eventIndex) {
+  const beatIndex = instance.beats[measureIndex]?.[eventIndex];
+  if (beatIndex === null || beatIndex === undefined) return null;
+  return instance.api.score?.tracks[0]?.staves[0]?.bars[measureIndex]?.voices[0]?.beats[beatIndex] ?? null;
+}
+
+// The playback cursor: a thin line standing on the column being played,
+// sliding to the next column (or to the end of the bar when the next one
+// is elsewhere) over `durationMs`. Spans every staff of the block. Hidden
+// with the other highlights when playback stops.
+export function alphaTabCursor(id, measureIndex, eventIndex, next, durationMs) {
+  const instance = instances.get(id);
+  const lookup = instance?.api.renderer?.boundsLookup;
+  const surface = instance?.target.querySelector(".at-surface");
+  const beat = instance ? beatAt(instance, measureIndex, eventIndex) : null;
+  const bounds = beat && lookup ? lookup.findBeat(beat) : null;
+  if (!bounds || !surface) return null;
+  let line = instance.target.querySelector(".at-beat-cursor");
+  if (!line) {
+    line = document.createElement("div");
+    line.className = "at-beat-cursor";
+    instance.target.appendChild(line);
+  }
+  const bar = bounds.barBounds.masterBarBounds.visualBounds;
+  const nextBeat = next && next.measure === measureIndex ? beatAt(instance, next.measure, next.event) : null;
+  const nextBounds = nextBeat ? lookup.findBeat(nextBeat) : null;
+  const x = surface.offsetLeft + bounds.onNotesX;
+  const targetX = surface.offsetLeft + (nextBounds ? nextBounds.onNotesX : bar.x + bar.w);
+  line.style.transition = "none";
+  line.style.left = `${x}px`;
+  line.style.top = `${surface.offsetTop + bar.y}px`;
+  line.style.height = `${bar.h}px`;
+  line.classList.add("playing");
+  line.dataset.targetX = String(targetX);
+  line.dataset.endsAt = String(performance.now() + durationMs);
+  if (durationMs > 30 && targetX > x) {
+    void line.offsetWidth; // commit the start position before animating
+    line.style.transition = `left ${Math.round(durationMs)}ms linear`;
+    line.style.left = `${targetX}px`;
+  }
+  return line;
+}
+
+// Playback paused: the cursor stops where it is; resumed: it finishes its
+// slide in the time that was left.
+export function alphaTabCursorPause(id) {
+  const line = instances.get(id)?.target.querySelector(".at-beat-cursor.playing");
+  if (!line) return;
+  const left = getComputedStyle(line).left;
+  line.dataset.remainingMs = String(Math.max(0, Number(line.dataset.endsAt) - performance.now()));
+  line.style.transition = "none";
+  line.style.left = left;
+}
+
+export function alphaTabCursorResume(id) {
+  const line = instances.get(id)?.target.querySelector(".at-beat-cursor.playing");
+  const remaining = Number(line?.dataset.remainingMs);
+  if (!line || !(remaining > 30)) return;
+  void line.offsetWidth;
+  line.style.transition = `left ${Math.round(remaining)}ms linear`;
+  line.style.left = `${line.dataset.targetX}px`;
+  line.dataset.endsAt = String(performance.now() + remaining);
 }
 
 // The ASCII column drawn under a point of the block (client coordinates):

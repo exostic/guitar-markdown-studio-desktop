@@ -331,7 +331,7 @@ with several usable tracks, a dialog asks which ones to import.
 A "▶ Écouter" button appears above `tab`, `partition`, `chords`, `grid` and `rhythm` blocks.
 Tempo comes from `tempo`, meter from `time`, pitch from `tuning` and `capo`. Nothing is needed
 in the Markdown to enable it. While a `tab`/`partition` block plays, the note or chord being
-played turns pink on the engraving and the current bar is framed. Clicking a note plays it alone, parks a cursor there and selects that fret in the editor; while a
+played turns pink on the engraving, the current bar is framed and a vertical cursor slides from one note to the next. Clicking a note plays it alone, parks a cursor there and selects that fret in the editor; while a
 block plays the preview follows the current note (the editor does not move), and Space pauses/resumes (or restarts the last block);
 the play button then starts from that cursor until playback reaches the end of the block. A speed selector next to each button (25/50/65/80/100 %) slows
 that block down for practice; it is a reader-side setting, not something to write in the file.

@@ -1780,7 +1780,7 @@ async function buildWebExportDocument(title) {
   // back to its printable table. Highlight state is stripped as well.
   const exported = preview.cloneNode(true);
   exported.querySelectorAll(".playing, .active").forEach(el => el.classList.remove("playing", "active"));
-  exported.querySelectorAll(".at-bar-highlight").forEach(el => el.remove());
+  exported.querySelectorAll(".at-bar-highlight, .at-beat-cursor").forEach(el => el.remove());
   exported.querySelectorAll("[data-alphatex]").forEach(el => delete el.dataset.alphatex);
   const html = `<!doctype html>
 <html lang="fr">
