@@ -1570,6 +1570,10 @@ pre {
 .alphatab-host .at-surface {
   margin: 0 auto;
 }
+/* While printing: the static copy stands in for the live surface. */
+.alphatab-host.at-frozen .at-surface:not(.at-print-copy) {
+  display: none;
+}
 /* Bar being played: a soft box over alphaTab's bounds for that bar. */
 .at-bar-highlight {
   position: absolute;

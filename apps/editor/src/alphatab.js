@@ -160,6 +160,31 @@ export function alphaTabEventAtPoint(id, clientX, clientY) {
   return eventIndex >= 0 ? { measure, event: eventIndex } : null;
 }
 
+// Printing: alphaTab re-engraves a block when its host changes width (the
+// print layout drops the scrollbar, changes the margins), and the new
+// systems land on top of the old ones in the print snapshot. While
+// printing, each block shows a static copy of its engraving and hides the
+// live surface, which alphaTab can redraw as it likes meanwhile.
+export function freezeAlphaTabBlocks() {
+  for (const { target } of instances.values()) {
+    if (target.querySelector(".at-print-copy")) continue;
+    const surface = target.querySelector(".at-surface");
+    if (!surface) continue;
+    const copy = surface.cloneNode(true);
+    copy.classList.add("at-print-copy");
+    copy.setAttribute("aria-hidden", "true");
+    target.classList.add("at-frozen");
+    target.appendChild(copy);
+  }
+}
+
+export function thawAlphaTabBlocks() {
+  for (const { target } of instances.values()) {
+    target.querySelectorAll(".at-print-copy").forEach(copy => copy.remove());
+    target.classList.remove("at-frozen");
+  }
+}
+
 // A Guitar Pro file (.gp3 to .gp5, .gpx, .gp), parsed by alphaTab: the
 // score plus a description of its tracks for choosing which to convert.
 export async function loadGuitarPro(bytes) {

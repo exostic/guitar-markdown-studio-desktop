@@ -11,7 +11,7 @@ import { parseTuning } from "@gms/guitar-markdown";
 import { bindPlayback, clearRegistry, registerBlock, stopAll, syncSpeedControls, togglePlayPause } from "./audio/playback.js";
 import { parseSound } from "./audio/sound.js";
 import { setSampler } from "./audio/engine.js";
-import { destroyAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPro, onAlphaTabRendered, renderAlphaTabBlock } from "./alphatab.js";
+import { destroyAlphaTabBlocks, freezeAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPro, onAlphaTabRendered, renderAlphaTabBlock, thawAlphaTabBlocks } from "./alphatab.js";
 import { parseStaff } from "./blockOptions.js";
 import { downloadFile, getDriveConfig, getFileInfo, listMarkdownFiles, setDriveConfig, shareFile, signOut as driveSignOut, uploadFile } from "./drive.js";
 import { OWN_SERVICE_KEY, ownServiceUrl, shortenUrl } from "./shortlink.js";
@@ -1429,6 +1429,25 @@ function previewSettled(timeoutMs = 10_000) {
   });
 }
 
+// Prints (or exports to PDF on the desktop) with the notation blocks
+// frozen meanwhile — see freezeAlphaTabBlocks. Cmd+P goes through the
+// same freeze by the beforeprint/afterprint events.
+async function printFrozen(fileName) {
+  freezeAlphaTabBlocks();
+  try {
+    if (window.gmsDesktop) {
+      const result = await window.gmsDesktop.exportPdf(fileName);
+      if (result) status.textContent = "PDF exporté";
+    } else {
+      window.print();
+    }
+  } finally {
+    thawAlphaTabBlocks();
+  }
+}
+window.addEventListener("beforeprint", freezeAlphaTabBlocks);
+window.addEventListener("afterprint", thawAlphaTabBlocks);
+
 async function printAsMode(targetMode) {
   stopAll();
   await prepareHeaderQr();
@@ -1439,12 +1458,7 @@ async function printAsMode(targetMode) {
   update();
   await previewSettled();
   const { data } = parseFrontMatter(editor.value);
-  if (window.gmsDesktop) {
-    const result = await window.gmsDesktop.exportPdf(`${slugify(data.title)}.pdf`);
-    if (result) status.textContent = "PDF exporté";
-  } else {
-    window.print();
-  }
+  await printFrozen(`${slugify(data.title)}.pdf`);
   fitToPage = previousFitToPage;
   webMode = previousWebMode;
   update();
@@ -1456,12 +1470,7 @@ async function printCurrent() {
   update();
   await previewSettled();
   const { data } = parseFrontMatter(editor.value);
-  if (window.gmsDesktop) {
-    const result = await window.gmsDesktop.exportPdf(`${slugify(data.title)}.pdf`);
-    if (result) status.textContent = "PDF exporté";
-  } else {
-    window.print();
-  }
+  await printFrozen(`${slugify(data.title)}.pdf`);
 }
 
 function currentModeToken() {
@@ -1869,12 +1878,7 @@ printButton.addEventListener("click", async () => {
   await prepareHeaderQr();
   update();
   await previewSettled();
-  if (window.gmsDesktop) {
-    const result = await window.gmsDesktop.exportPdf(`${slugify(data.title)}.pdf`);
-    if (result) status.textContent = "PDF exporté";
-  } else {
-    window.print();
-  }
+  await printFrozen(`${slugify(data.title)}.pdf`);
 });
 document.querySelector("#download-md").addEventListener("click", async () => {
   if (window.gmsDesktop) {
