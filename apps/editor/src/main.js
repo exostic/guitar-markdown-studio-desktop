@@ -117,7 +117,7 @@ app.innerHTML = `
     <div class="track-picker drive-settings" id="share-password" role="dialog" aria-modal="true" hidden>
       <div class="insert-menu-heading">Partager</div>
       <h2 class="track-picker-title">Mot de passe de partage</h2>
-      <p class="drive-help">Avec un mot de passe, le cours est chiffré dans le lien (AES-256, dans votre navigateur) : le lien, le raccourcisseur et le message ne transportent que des données illisibles, et le destinataire doit saisir le mot de passe pour ouvrir le cours. Le message envoyé par e-mail l'indique au destinataire ; pour un lien copié, communiquez-le vous-même.</p>
+      <p class="drive-help">Avec un mot de passe, le cours est chiffré dans le lien (AES-256, dans votre navigateur) : le raccourcisseur et le message ne voient que des données illisibles, et le destinataire saisit le mot de passe pour l'ouvrir. Le message e-mail le lui indique ; pour un lien copié, communiquez-le vous-même.</p>
       <label class="drive-field">Mot de passe<input type="password" id="share-password-input" autocomplete="off" placeholder="vide : lien sans mot de passe"></label>
       <div class="track-picker-actions">
         <button type="button" id="share-password-cancel">Annuler</button>

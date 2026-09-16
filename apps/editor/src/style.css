@@ -495,9 +495,17 @@ button:focus-visible,
 }
 .track-picker-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 0.9rem;
+}
+/* A phone: the buttons fill the rows they wrap onto instead of running
+   off the dialog. */
+@media (max-width: 520px) {
+  .track-picker-actions button {
+    flex: 1 1 auto;
+  }
 }
 @media (max-width: 720px) {
   .insert-menu {
