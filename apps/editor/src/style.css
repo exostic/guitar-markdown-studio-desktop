@@ -1570,9 +1570,13 @@ pre {
 .alphatab-host .at-surface {
   margin: 0 auto;
 }
-/* While printing: the static copy stands in for the live surface. */
+/* While printing: the static copy stands in for the live surface, one
+   unbreakable system after another. */
 .alphatab-host.at-frozen .at-surface:not(.at-print-copy) {
   display: none;
+}
+.at-print-copy > div {
+  break-inside: avoid;
 }
 /* Bar being played: a soft box over alphaTab's bounds for that bar. */
 .at-bar-highlight {

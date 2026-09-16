@@ -160,11 +160,14 @@ export function alphaTabEventAtPoint(id, clientX, clientY) {
   return eventIndex >= 0 ? { measure, event: eventIndex } : null;
 }
 
-// Printing: alphaTab re-engraves a block when its host changes width (the
-// print layout drops the scrollbar, changes the margins), and the new
-// systems land on top of the old ones in the print snapshot. While
-// printing, each block shows a static copy of its engraving and hides the
-// live surface, which alphaTab can redraw as it likes meanwhile.
+// Printing: alphaTab draws every system as an absolutely positioned box
+// in a surface of fixed height, and the browser misplaces such boxes when
+// a page break cuts through the surface — systems of the second page end
+// up drawn over each other. alphaTab also re-engraves a block when its
+// host changes width, which the print layout does. So while printing, each
+// block shows a static copy of its engraving, with the systems stacked in
+// normal flow (each one unbreakable, so page breaks fall between them),
+// and hides the live surface, which alphaTab can redraw meanwhile.
 export function freezeAlphaTabBlocks() {
   for (const { target } of instances.values()) {
     if (target.querySelector(".at-print-copy")) continue;
@@ -173,6 +176,20 @@ export function freezeAlphaTabBlocks() {
     const copy = surface.cloneNode(true);
     copy.classList.add("at-print-copy");
     copy.setAttribute("aria-hidden", "true");
+    copy.style.height = "";
+    copy.style.overflow = "visible";
+    const systems = [...copy.children].sort((a, b) => (parseFloat(a.style.top) || 0) - (parseFloat(b.style.top) || 0));
+    let bottom = 0;
+    for (const system of systems) {
+      const top = parseFloat(system.style.top) || 0;
+      const height = parseFloat(system.style.height) || 0;
+      system.style.position = "relative";
+      system.style.top = "";
+      system.style.display = "block";
+      system.style.marginTop = `${Math.max(0, top - bottom)}px`;
+      bottom = top + height;
+      copy.appendChild(system);
+    }
     target.classList.add("at-frozen");
     target.appendChild(copy);
   }
