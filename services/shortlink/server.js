@@ -1,6 +1,8 @@
 // HTTP front of the shortener, for Cloud Run:
 //   POST /api/links  {"url": "https://gms.exostic.com/?doc=…"}  → {"url": "https://<host>/<alias>"}
-//   GET  /<alias>                                                 → 302 to the link
+//   GET  /<alias>                                                 → 302 to the link, or a page
+//                                                                  that opens it when the link is too
+//                                                                  long for a Location header
 //   GET  /                                                        → a word, for health checks
 // Environment: PORT (Cloud Run sets it), ALLOWED_ORIGINS (comma-separated
 // origins allowed as link targets and as CORS callers; default: the app),
@@ -50,6 +52,21 @@ function cors(request, response) {
   response.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   response.setHeader("Access-Control-Allow-Headers", "Content-Type");
   response.setHeader("Access-Control-Max-Age", "86400");
+}
+
+// Google's front end drops a Location header beyond about 8 KB (the link
+// of a long course, compressed, easily exceeds it): above this size the
+// alias answers with a page that opens the link from the browser.
+const LOCATION_MAX = 4000;
+
+function escapeHtml(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function redirectPage(target) {
+  const attr = escapeHtml(target);
+  const script = JSON.stringify(target).replace(/<\//g, "<\\/");
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0;url=${attr}"><title>Ouverture du cours…</title></head><body><p>Ouverture du cours… <a href="${attr}">Ouvrir</a></p><script>location.replace(${script});</script></body></html>`;
 }
 
 function send(response, status, body, type = "application/json; charset=utf-8") {
@@ -102,8 +119,12 @@ export function createApp(store) {
       if (url.pathname === "/") return send(response, 200, "gms-shortlink", "text/plain; charset=utf-8");
       const target = await resolve(store, url.pathname.slice(1));
       if (!target) return send(response, 404, "Lien inconnu.", "text/plain; charset=utf-8");
-      response.writeHead(302, { Location: target, "Cache-Control": "public, max-age=300" });
-      return response.end();
+      if (target.length <= LOCATION_MAX) {
+        response.writeHead(302, { Location: target, "Cache-Control": "public, max-age=300" });
+        return response.end();
+      }
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" });
+      return response.end(redirectPage(target));
     }
     return send(response, 405, { error: "Méthode non autorisée." });
   };

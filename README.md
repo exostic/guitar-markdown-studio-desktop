@@ -229,7 +229,8 @@ Par défaut, les liens de partage sont raccourcis par TinyURL, qui conserve donc
 
 ```
 POST /api/links   {"url": "https://gms.exostic.com/?doc=…"}   →  {"url": "https://l.exostic.com/Ab3dEf9"}
-GET  /Ab3dEf9                                                →  302 vers le lien
+GET  /Ab3dEf9                                                →  302 vers le lien (au-delà de 4 000 caractères : une page qui l'ouvre,
+                                                                le frontal de Google supprimant un en-tête Location trop long)
 ```
 
 Déploiement, depuis le dossier du dépôt, avec le [SDK gcloud](https://cloud.google.com/sdk/docs/install) et le projet Google Cloud déjà utilisé pour OAuth :
