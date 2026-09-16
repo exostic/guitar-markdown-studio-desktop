@@ -88,6 +88,7 @@ app.innerHTML = `
           <button type="button" data-drive="save">Enregistrer sur Drive</button>
           <button type="button" data-drive="save-as">Enregistrer sous… (Drive)</button>
           <button type="button" data-drive="settings">Réglages Google…</button>
+          <button type="button" id="install-app" hidden>Installer l'application</button>
           <button type="button" data-drive="sign-out">Se déconnecter</button>
         </div>
       </span>
@@ -1971,3 +1972,26 @@ async function openSealedDocument(enc) {
 }
 
 loadFromQueryParams();
+
+// Installable web app: the service worker (production, web only) makes
+// Chrome offer "Installer" in the address bar; the Fichier menu offers it
+// too once the browser says the app qualifies.
+if (import.meta.env.PROD && "serviceWorker" in navigator && !window.gmsDesktop) {
+  navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }).catch(error => console.warn("[pwa] service worker", error));
+}
+const installButton = document.querySelector("#install-app");
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", event => {
+  event.preventDefault();
+  installPrompt = event;
+  installButton.hidden = false;
+});
+installButton.addEventListener("click", async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  const { outcome } = await installPrompt.userChoice;
+  installPrompt = null;
+  installButton.hidden = true;
+  status.textContent = outcome === "accepted" ? "Application installée" : "";
+});
+window.addEventListener("appinstalled", () => { installButton.hidden = true; });

@@ -302,7 +302,8 @@ printed as a QR code.
 
 ### Google Drive
 
-The "Fichier ▾" menu opens a document from Google Drive, saves it back to the same file or saves
+The site is an installable PWA (web manifest + service worker, offline-capable; Chrome shows an install icon,
+"Fichier ▾ › Installer l'application" does the same). The "Fichier ▾" menu opens a document from Google Drive, saves it back to the same file or saves
 it under another name; "Partager ▾" shares the Drive file with another Google account (reader or writer)
 or opens the mail client (mailto, new tab) on a ready-made message with a short alias of the share link
 (TinyURL, no key; full link when shortening fails and it fits, clipboard + "paste it" beyond that). Client-side OAuth only with the `drive.file` scope (the app sees only the

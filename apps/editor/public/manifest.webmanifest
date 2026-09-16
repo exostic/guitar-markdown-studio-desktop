@@ -1,0 +1,18 @@
+{
+  "name": "Guitar Markdown Studio",
+  "short_name": "Guitar MD Studio",
+  "description": "Éditeur de cours de guitare en Markdown : tablatures, diagrammes d'accords, gammes, grilles, paroles, théorie et lecture audio.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b012e",
+  "theme_color": "#0b012e",
+  "categories": ["education", "music"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
