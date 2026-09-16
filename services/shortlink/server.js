@@ -12,7 +12,7 @@ import { MemoryStore, parseAllowedOrigins, resolve, shorten } from "./links.js";
 const PORT = Number(process.env.PORT ?? 8080);
 const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS ?? "https://gms.exostic.com,http://localhost:5173,http://localhost:4173");
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? "").replace(/\/+$/, "");
-const MAX_BODY = 70_000;
+const MAX_BODY = 1_100_000;
 const RATE_LIMIT = { windowMs: 60_000, max: 30 };
 const hits = new Map();
 

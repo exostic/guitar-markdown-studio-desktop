@@ -225,7 +225,7 @@ Sur le web, la connexion passe par la fenêtre Google dans la page ; dans l'appl
 
 ## Liens courts : votre propre service (Cloud Run)
 
-Par défaut, les liens de partage sont raccourcis par TinyURL, qui conserve donc le lien (et le cours qu'il contient) sans limite de durée. Le dossier `services/shortlink` est un remplaçant minuscule à héberger sur Google Cloud Run avec Firestore, dans les quotas gratuits (2 millions de requêtes et 360 000 Go·s par mois pour Cloud Run, 1 Go et 50 000 lectures par jour pour Firestore ; un compte de facturation doit être rattaché au projet, mais rien n'est facturé sous ces seuils). Le service ne raccourcit que les liens de l'application (pas de redirection ouverte), calcule l'alias à partir du lien (même lien, même alias) et limite les demandes par adresse.
+Par défaut, les liens de partage sont raccourcis par TinyURL, qui conserve donc le lien (et le cours qu'il contient) sans limite de durée. Le dossier `services/shortlink` est un remplaçant minuscule à héberger sur Google Cloud Run avec Firestore, dans les quotas gratuits (2 millions de requêtes et 360 000 Go·s par mois pour Cloud Run, 1 Go et 50 000 lectures par jour pour Firestore ; un compte de facturation doit être rattaché au projet, mais rien n'est facturé sous ces seuils). Le service ne raccourcit que les liens de l'application (pas de redirection ouverte), calcule l'alias à partir du lien (même lien, même alias), accepte des liens jusqu'à 1 million de caractères (limite d'un document Firestore) et limite les demandes par adresse.
 
 ```
 POST /api/links   {"url": "https://gms.exostic.com/?doc=…"}   →  {"url": "https://l.exostic.com/Ab3dEf9"}
@@ -347,7 +347,7 @@ L'éditeur web (https://gms.exostic.com/) accepte des paramètres d'URL :
 - `?enc=<base64url>` : document chiffré par mot de passe (1 octet de version, sel 16 octets, IV 12 octets, AES-256-GCM du document compressé par lz-string ; clé PBKDF2-SHA-256, 150 000 itérations). Le mot de passe est demandé à l'ouverture.
 - `?src=<url>` : charge un fichier `.md` distant (raw GitHub, Gist, tout hébergement statique public ; une URL `github.com/.../blob/...` est convertie automatiquement).
 - `?b64=<base64>` : le document encodé en base64 (alphabet standard ou URL-safe), sans hébergement.
-- `?doc=<lz-string>` : le format produit par le bouton **Partager** (`compressToEncodedURIComponent`).
+- `#doc=<lz-string>` (ou `?doc=` pour les anciens liens) : le format produit par **Copier un lien de partage** (`compressToEncodedURIComponent`). Le document est placé après le `#` : cette partie n'est jamais envoyée au serveur, ce qui contourne la limite de 8 Ko que GitHub Pages impose à la partie `?` (erreur 414 au-delà) ; seule la limite du navigateur reste (2 Mo dans Chrome). Les autres paramètres (`mode`, `view`, `edit`, `enc`…) sont lus indifféremment après `?` ou `#`.
 - `mode=web|book|poster`, `view=only`, `edit=hide`, `print=hide` : mode d'affichage et boutons masqués.
 
 ## Agents IA

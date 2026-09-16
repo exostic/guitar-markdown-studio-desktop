@@ -22,8 +22,10 @@ Write the whole lesson as one Markdown document, then give the user ONE of these
 2. `https://gms.exostic.com/?b64=<base64 of the UTF-8 Markdown>` — no hosting needed.
    Standard or URL-safe base64 both work. Percent-encode `+`, `/` and `=` if you use standard
    base64 (or use URL-safe base64: `-` and `_`, padding optional). Links get long
-   (roughly 1.4 × the document size) but work for lessons of a few kilobytes.
-3. `https://gms.exostic.com/?doc=<lz-string compressToEncodedURIComponent(markdown)>` —
+   (roughly 1.4 × the document size) but work for lessons of a few kilobytes. Put the parameters
+   after `#` rather than `?` for anything long: the fragment never reaches the server, so it escapes
+   GitHub Pages' 8 KB query limit (HTTP 414 beyond); the app reads both forms.
+3. `https://gms.exostic.com/#doc=<lz-string compressToEncodedURIComponent(markdown)>` (or `?doc=`) —
    what the app's own "Copier un lien de partage" produces (behind a short alias — the app's own
    Cloud Run shortener from services/shortlink when configured, else TinyURL); shortest self-contained link, needs the `lz-string` library.
 

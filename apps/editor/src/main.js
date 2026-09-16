@@ -1441,13 +1441,39 @@ async function copyToClipboard(text) {
   }
 }
 
+// The document travels in the URL fragment (#doc=…): the fragment is
+// never sent to the server, so the link escapes the 8 KB limit GitHub
+// Pages puts on the query string; only the browser's own limit (2 MB in
+// Chrome) remains. Older links carried it in the query (?doc=…): both are
+// read, the fragment taking precedence.
+function urlParams() {
+  const params = new URLSearchParams(window.location.search);
+  const hash = window.location.hash.replace(/^#/, "");
+  if (hash.includes("=")) for (const [key, value] of new URLSearchParams(hash)) params.set(key, value);
+  return params;
+}
+
+// Rewrites the view-state parameters where the document lives: in the
+// fragment when the URL carries one, else in the query.
+function writeViewParams(mutate, { push = false } = {}) {
+  const hash = window.location.hash.replace(/^#/, "");
+  const inHash = hash.includes("=");
+  const params = new URLSearchParams(inHash ? hash : window.location.search);
+  mutate(params);
+  const text = params.toString();
+  const url = inHash
+    ? `${window.location.pathname}${window.location.search}${text ? `#${text}` : ""}`
+    : `${window.location.pathname}${text ? `?${text}` : ""}${window.location.hash}`;
+  (push ? history.pushState : history.replaceState).call(history, null, "", url);
+}
+
 function buildShareUrl(mode) {
   const params = new URLSearchParams();
   params.set("doc", toBase64(editor.value));
   params.set("mode", mode);
   params.set("view", "only");
   params.set("edit", "hide");
-  return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  return `${window.location.origin}${window.location.pathname}#${params.toString()}`;
 }
 
 function buildHeaderQrUrl() {
@@ -1460,7 +1486,7 @@ function buildHeaderQrUrl() {
   params.set("mode", "web");
   params.set("view", "only");
   params.set("edit", "hide");
-  return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  return `${window.location.origin}${window.location.pathname}#${params.toString()}`;
 }
 
 // Password for the next share links (kept for the session only).
@@ -1597,7 +1623,7 @@ async function shareByEmail() {
 document.querySelector("#email-btn").addEventListener("click", () => shareByEmail().catch(error => { status.textContent = error.message; console.error("[share]", error); }));
 
 function syncViewStateFromUrl() {
-  const params = new URLSearchParams(window.location.search);
+  const params = urlParams();
   const requestedMode = VIEW_MODE_PARAM[params.get("mode")] ?? "web";
   viewOnly = params.get("view") === "only";
   hideEditButton = params.get("edit") === "hide";
@@ -1610,20 +1636,17 @@ window.addEventListener("popstate", syncViewStateFromUrl);
 viewOnlyButton.addEventListener("click", () => {
   viewOnly = true;
   applyCompactMode();
-  const params = new URLSearchParams(window.location.search);
-  params.set("view", "only");
-  params.set("mode", currentModeToken());
   // pushState, not replaceState — so the browser's back button has an
   // actual previous entry (the editing view) to return to.
-  history.pushState(null, "", `${window.location.pathname}?${params.toString()}`);
+  writeViewParams(params => {
+    params.set("view", "only");
+    params.set("mode", currentModeToken());
+  }, { push: true });
 });
 voExitEditButton.addEventListener("click", () => {
   viewOnly = false;
   applyCompactMode();
-  const params = new URLSearchParams(window.location.search);
-  params.delete("view");
-  const query = params.toString();
-  history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  writeViewParams(params => params.delete("view"));
 });
 voPrintButton.addEventListener("click", () => printCurrent());
 voPrintBookButton.addEventListener("click", () => printAsMode("standard"));
@@ -1911,7 +1934,7 @@ function normalizeSrcUrl(url) {
 }
 
 async function loadFromQueryParams() {
-  const params = new URLSearchParams(window.location.search);
+  const params = urlParams();
   const doc = params.get("doc");
   const b64 = params.get("b64");
   const src = params.get("src");

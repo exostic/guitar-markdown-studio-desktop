@@ -29,5 +29,5 @@ test("seuls les liens de l'application sont acceptés", () => {
   assert.throws(() => validateUrl("http://gms.exostic.com/?doc=x", origins), /https/);
   assert.throws(() => validateUrl("pas une url", origins), /invalide/);
   assert.throws(() => validateUrl("", origins), /manquant/);
-  assert.throws(() => validateUrl(`https://gms.exostic.com/?doc=${"x".repeat(70_000)}`, origins), /trop long/);
+  assert.throws(() => validateUrl(`https://gms.exostic.com/?doc=${"x".repeat(1_100_000)}`, origins), /trop long/);
 });

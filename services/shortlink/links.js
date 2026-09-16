@@ -7,7 +7,8 @@ import { createHash } from "node:crypto";
 
 const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const ALIAS_LENGTH = 7;
-const MAX_URL_LENGTH = 65_536;
+// Firestore keeps 1 MiB per document; browsers accept 2 MB URLs (Chrome).
+const MAX_URL_LENGTH = 1_000_000;
 
 function base62(bytes) {
   let out = "";
