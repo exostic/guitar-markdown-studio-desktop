@@ -510,23 +510,35 @@ button:focus-visible,
 .grow {
   flex: 1;
 }
+/* Status toast: bottom centre, only while there is a message (main.js). */
 #status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--text-dim);
-  font-size: 0.78rem;
+  position: fixed;
+  left: 50%;
+  bottom: 1.1rem;
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: min(92vw, 40rem);
+  padding: 0.55rem 0.95rem;
+  border-radius: 999px;
+  background: rgb(20 18 32 / 0.92);
+  color: #fff;
+  font-size: 0.82rem;
   font-weight: 500;
-  margin-right: 0.35rem;
-  white-space: nowrap;
+  line-height: 1.35;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  pointer-events: none;
+  animation: status-in 160ms ease-out;
 }
-#status::before {
-  content: "";
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: var(--primary);
-  box-shadow: 0 0 8px rgb(228 59 125 / 0.7);
+@keyframes status-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+@media print {
+  #status {
+    display: none;
+  }
 }
 .workspace {
   position: relative;

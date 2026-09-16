@@ -74,7 +74,6 @@ app.innerHTML = `
       <div><h1>Guitar Markdown Studio</h1><p><a class="brand-link" href="llms.txt" target="_blank" rel="noopener" title="Référence de la syntaxe, lisible par les agents IA">Doc / agents IA</a> · <a class="brand-link" href="confidentialite/" target="_blank" rel="noopener">Confidentialité</a> · <a class="brand-link" href="conditions/" target="_blank" rel="noopener">Conditions</a></p></div>
     </div>
     <div class="actions">
-      <span id="status">Prêt</span>
       <span class="dropdown">
         <button id="file-btn" type="button" aria-haspopup="menu" aria-expanded="false">Fichier ▾</button>
         <div class="dropdown-menu" id="file-menu" role="menu" hidden>
@@ -355,7 +354,7 @@ async function driveOpen() {
   if (!(await ensureDriveConfigured())) return;
   const chosen = await chooseDriveFile();
   if (!chosen) {
-    status.textContent = "Prêt";
+    status.textContent = "";
     return;
   }
   status.textContent = "Téléchargement…";
@@ -465,7 +464,35 @@ const modePortraitButton = document.querySelector("#mode-portrait");
 const modeLandscapeButton = document.querySelector("#mode-landscape");
 const modeWebButton = document.querySelector("#mode-web");
 const printButton = document.querySelector("#print");
-const status = document.querySelector("#status");
+// Feedback for the user: a small toast at the bottom of the window, shown
+// only while there is something to say. A message ending in "…" is in
+// progress and stays until the next one; any other message goes away by
+// itself after a few seconds. Written through `status.textContent` from
+// everywhere in the app.
+const statusToast = document.createElement("div");
+statusToast.id = "status";
+statusToast.setAttribute("role", "status");
+statusToast.setAttribute("aria-live", "polite");
+statusToast.hidden = true;
+document.body.appendChild(statusToast);
+let statusTimer = null;
+const status = {
+  get textContent() {
+    return statusToast.hidden ? "" : statusToast.textContent;
+  },
+  set textContent(message) {
+    clearTimeout(statusTimer);
+    const text = String(message ?? "").trim();
+    if (!text || text === "Prêt") {
+      statusToast.hidden = true;
+      statusToast.textContent = "";
+      return;
+    }
+    statusToast.textContent = text;
+    statusToast.hidden = false;
+    if (!text.endsWith("…")) statusTimer = setTimeout(() => { statusToast.hidden = true; }, 4500);
+  },
+};
 editor.value = saved;
 
 const snippets = {
@@ -1191,7 +1218,6 @@ function update() {
 
 let debounce;
 editor.addEventListener("input", () => {
-  status.textContent = "Rendu…";
   clearTimeout(debounce);
   debounce = setTimeout(update, 140);
 });
