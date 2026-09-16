@@ -827,6 +827,7 @@ function notationSettled(timeoutMs = 10_000) {
 // most that; a heading never ends a column. Every block is measured at its
 // final width already, so nothing reflows when it moves.
 let hasPosterMarkers = false;
+let posterMeasuring = false;
 let posterLayoutToken = 0;
 let posterLayoutReady = Promise.resolve();
 
@@ -842,9 +843,21 @@ function autoPaginatePoster() {
     const nodes = [...measuring.childNodes].filter(node => node.nodeType === 1 || (node.nodeType === 3 && node.textContent.trim()));
     if (!nodes.length) return;
     const capacity = (LANDSCAPE_CONTENT_HEIGHT_MM * MM_TO_PX) / POSTER_FILL;
-    // Natural sizes, at the column's own width (the measuring page was not
-    // fitted): a column is only ever widened afterwards, which makes nothing
-    // taller.
+    // Natural sizes, at the column's own width: whatever fitted the
+    // measuring page meanwhile (a resize event at load) is undone, and the
+    // notation given time to re-engrave at that width. A column is only
+    // ever widened afterwards, which makes nothing taller.
+    const measuringPage = measuring.closest(".course-page.landscape-fit");
+    posterMeasuring = true;
+    for (const element of [measuringPage, measuring]) {
+      element.style.transform = "";
+      element.style.width = "";
+      element.style.height = "";
+    }
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await notationSettled();
+    posterMeasuring = false;
+    if (token !== posterLayoutToken || !fitToPage) return;
     const base = measuring.getBoundingClientRect().top;
     const tops = nodes.map(node => (node.nodeType === 1 ? node.getBoundingClientRect().top : base) - base);
     const total = measuring.scrollHeight;
@@ -1362,8 +1375,10 @@ window.addEventListener("resize", () => {
       return;
     }
     if (fitToPage) {
-      rescaleLandscapeColumns();
-      fitPosterPageToViewport();
+      // Auto-flowed pages are fixed A4 sheets: only their fit to the
+      // viewport depends on the window, and not while they are measured.
+      if (hasPosterMarkers) rescaleLandscapeColumns();
+      if (!posterMeasuring) fitPosterPageToViewport();
     } else {
       renderPageBreaks();
     }

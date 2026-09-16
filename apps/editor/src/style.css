@@ -1495,12 +1495,16 @@ pre {
     display: block !important;
     overflow: visible;
   }
+  /* On a phone the Book page and the Poster pages are shrunk to the screen
+     (a transform plus the shrunk sizes, inline): paper gets the real A4
+     page, so every one of those is overridden here. */
   #preview-scale-wrapper {
+    width: auto !important;
     height: auto !important;
     overflow: visible;
   }
   .course-page {
-    width: auto;
+    width: auto !important;
     min-height: 0;
     margin: 0;
     padding: 0;
@@ -1510,9 +1514,10 @@ pre {
     transform: none !important;
   }
   .course-page.landscape-fit {
-    width: 297mm;
-    height: 210mm;
+    width: 297mm !important;
+    height: 210mm !important;
     padding: 1rem;
+    transform: none !important;
   }
   .course-page.landscape-fit + .course-page.landscape-fit {
     break-before: page;
