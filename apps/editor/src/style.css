@@ -395,9 +395,21 @@ button:focus-visible,
   background: var(--surface);
   color: inherit;
 }
-.drive-file {
+/* Name first, date at the right; a long name wraps instead of pushing
+   the date out (declared after .track-picker-row so that it wins). */
+.track-picker-row.drive-file {
   width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
   cursor: pointer;
+  text-align: left;
+}
+.drive-file .track-picker-name {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.drive-file .track-picker-meta {
+  white-space: nowrap;
 }
 .drive-empty {
   margin: 0;

@@ -269,6 +269,18 @@ function openDriveSettings() {
   });
 }
 
+// "aujourd'hui 20:40", "hier 19:46", "15/09/2026" — short enough for a
+// phone next to the file name.
+function driveDateLabel(iso) {
+  const date = new Date(iso);
+  const time = date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const dayStart = value => new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+  const days = Math.round((dayStart(new Date()) - dayStart(date)) / 86_400_000);
+  if (days === 0) return `aujourd'hui ${time}`;
+  if (days === 1) return `hier ${time}`;
+  return date.toLocaleDateString("fr-FR");
+}
+
 // The file to open, from the app's own list of the Drive's Markdown files.
 // Resolves to { id, name } or null.
 async function chooseDriveFile() {
@@ -276,7 +288,7 @@ async function chooseDriveFile() {
   const files = await listMarkdownFiles();
   const list = document.querySelector("#drive-picker-list");
   list.innerHTML = files.length
-    ? files.map(file => `<button type="button" class="track-picker-row drive-file" data-id="${escapeHtml(file.id)}" data-name="${escapeHtml(file.name)}"><span class="track-picker-name">${escapeHtml(file.name)}</span><span class="track-picker-meta">modifié le ${escapeHtml(new Date(file.modifiedTime).toLocaleString("fr-FR"))}</span></button>`).join("")
+    ? files.map(file => `<button type="button" class="track-picker-row drive-file" data-id="${escapeHtml(file.id)}" data-name="${escapeHtml(file.name)}"><span class="track-picker-name">${escapeHtml(file.name)}</span><span class="track-picker-meta">${escapeHtml(driveDateLabel(file.modifiedTime))}</span></button>`).join("")
     : `<p class="drive-empty">Aucun cours enregistré par l'application sur ce Drive. Pour un fichier créé ailleurs, importez-le (Fichier › Importer…) puis enregistrez-le sur Drive : il apparaîtra ici ensuite.</p>`;
   showModal(drivePicker);
   return new Promise(resolve => {
