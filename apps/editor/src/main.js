@@ -39,14 +39,10 @@ const LANDSCAPE_MARGIN_PX = 16;
 const LANDSCAPE_CONTENT_HEIGHT_MM = PAGE_WIDTH_MM - (2 * LANDSCAPE_MARGIN_PX) / MM_TO_PX;
 const PREVIEW_GUTTER_PX = 64;
 const PAGE_FIT_MIN_SCALE = 0.35;
-// Poster without any landscapebreak / columnbreak marker: the content is
-// flowed into columns by itself. Columns per page (front matter
-// `poster-columns` overrides), and how full a column may get in natural
-// height before the next one starts: 1 / POSTER_FILL is the most a column
-// is then shrunk to fit.
+// Poster without a columnbreak marker: each page (what lies between two
+// landscapebreaks) is laid out by itself into this many balanced columns
+// (front matter `poster-columns` overrides).
 const POSTER_COLUMNS_DEFAULT = 3;
-const POSTER_FILL = 0.85;
-const POSTER_FILL_MAX = 0.7;
 const RHYTHM_FIT_MIN_SCALE = 0.4;
 const GRID_FIT_MIN_SCALE = 0.45;
 const app = document.querySelector("#app");
@@ -498,7 +494,8 @@ const status = {
     }
     statusToast.textContent = text;
     statusToast.hidden = false;
-    if (!text.endsWith("…")) statusTimer = setTimeout(() => { statusToast.hidden = true; }, 4500);
+    // A long message (a warning with what to do about it) stays longer.
+    if (!text.endsWith("…")) statusTimer = setTimeout(() => { statusToast.hidden = true; }, text.length > 60 ? 10_000 : 4500);
   },
 };
 editor.value = saved;
@@ -822,12 +819,13 @@ function notationSettled(timeoutMs = 10_000) {
   });
 }
 
-// Poster without markers: flows the content of the single measuring column
-// (see buildLandscapeStructure) into columns and pages. Each top-level
-// block is kept whole; a column takes blocks until their natural height
-// reaches the page height divided by POSTER_FILL, so it is shrunk by at
-// most that; a heading never ends a column. Every block is measured at its
-// final width already, so nothing reflows when it moves.
+// Poster without a columnbreak: lays the content of the single measuring
+// column (see buildLandscapeStructure) out by itself. A page is what lies
+// between two landscapebreaks — never more pages than the author asked
+// for — and its blocks, kept whole, are spread over balanced columns that
+// are then shrunk to the page height; a heading never ends a column. Every
+// block is measured at its final width already, so nothing reflows when it
+// moves.
 let hasPosterMarkers = false;
 let posterMeasuring = false;
 let posterLayoutToken = 0;
@@ -844,7 +842,6 @@ function autoPaginatePoster() {
     if (!measuring) return;
     const nodes = [...measuring.childNodes].filter(node => node.nodeType === 1 || (node.nodeType === 3 && node.textContent.trim()));
     if (!nodes.length) return;
-    const capacity = (LANDSCAPE_CONTENT_HEIGHT_MM * MM_TO_PX) / POSTER_FILL;
     // Natural sizes, at the column's own width: whatever fitted the
     // measuring page meanwhile (a resize event at load) is undone, and the
     // notation given time to re-engrave at that width. A column is only
@@ -863,52 +860,66 @@ function autoPaginatePoster() {
     const base = measuring.getBoundingClientRect().top;
     const tops = nodes.map(node => (node.nodeType === 1 ? node.getBoundingClientRect().top : base) - base);
     const total = measuring.scrollHeight;
-    const heights = tops.map((top, index) => (index + 1 < tops.length ? tops[index + 1] : total) - top);
+    const heights = tops.map((top, index) => Math.max(0, (index + 1 < tops.length ? tops[index + 1] : total) - top));
     const isHeading = node => node.nodeType === 1 && /^H[1-6]$/.test(node.tagName);
-    // A block that does not fit starts a new column — unless the column is
-    // still mostly empty and taking it keeps the shrink within POSTER_FILL_MAX
-    // (a tall tab after a short grid: better slightly smaller than a column
-    // left almost blank).
-    const stretch = (LANDSCAPE_CONTENT_HEIGHT_MM * MM_TO_PX) / POSTER_FILL_MAX;
     const isPageBreak = node => node.nodeType === 1 && node.classList.contains("landscape-page-break");
     const perPage = docSettings.posterColumns;
-    // Pages of columns: a page is full after `perPage` columns, and a
-    // landscapebreak ends it early.
-    const pages = [[[]]];
-    const column = () => pages.at(-1).at(-1);
-    const newColumn = seed => {
-      if (pages.at(-1).length >= perPage) pages.push([]);
-      pages.at(-1).push(seed);
-    };
-    let used = 0;
+    // Units that stay together: a heading (or several) and the block it
+    // titles. A landscapebreak closes the page.
+    const pages = [[]];
     nodes.forEach((node, index) => {
       if (isPageBreak(node)) {
         node.remove();
-        if (column().length || pages.at(-1).length > 1) pages.push([[]]);
-        used = 0;
+        if (pages.at(-1).length) pages.push([]);
         return;
       }
-      const height = Math.max(0, heights[index]);
-      const fits = used + height <= capacity || (used < capacity * 0.4 && used + height <= stretch);
-      if (column().length && !fits) {
-        // A heading left at the bottom moves along with what it titles.
-        const carried = [];
-        while (column().length && isHeading(column().at(-1))) carried.unshift(column().pop());
-        newColumn(carried);
-        used = carried.reduce((sum, item) => sum + heights[nodes.indexOf(item)], 0);
+      const units = pages.at(-1);
+      const last = units.at(-1);
+      if (last && last.headingOnly) {
+        last.nodes.push(node);
+        last.height += heights[index];
+        last.headingOnly = isHeading(node);
+      } else {
+        units.push({ nodes: [node], height: heights[index], headingOnly: isHeading(node) });
       }
-      column().push(node);
-      used += height;
     });
+    if (!pages.at(-1).length) pages.pop();
     if (token !== posterLayoutToken || !fitToPage) return;
     previewWrapper.querySelectorAll(".course-page.landscape-fit").forEach(pageBox => pageBox.remove());
-    for (const pageColumns of pages) {
-      while (pageColumns.length < perPage) pageColumns.push([]);
-      previewWrapper.append(landscapePage(pageColumns));
-    }
+    for (const units of pages) previewWrapper.append(landscapePage(balancedColumns(units, perPage).map(column => column.flatMap(unit => unit.nodes))));
     await settleLandscapePages(token);
   })();
   return posterLayoutReady;
+}
+
+// Splits units, in order, into `count` columns whose tallest is as short
+// as possible (a binary search on that height, columns filled greedily):
+// the page's columns come out about as full as each other, and are then
+// shrunk together by rescaleLandscapeColumns. Empty columns pad the end.
+function balancedColumns(units, count) {
+  const fill = limit => {
+    const columns = [[]];
+    let used = 0;
+    for (const unit of units) {
+      if (columns.at(-1).length && used + unit.height > limit) {
+        columns.push([]);
+        used = 0;
+      }
+      columns.at(-1).push(unit);
+      used += unit.height;
+    }
+    return columns;
+  };
+  let low = Math.max(0, ...units.map(unit => unit.height));
+  let high = units.reduce((sum, unit) => sum + unit.height, 0);
+  while (high - low > 1) {
+    const middle = (low + high) / 2;
+    if (fill(middle).length <= count) high = middle;
+    else low = middle;
+  }
+  const columns = fill(high);
+  while (columns.length < count) columns.push([]);
+  return columns;
 }
 
 // `noGrow`: a column keeps at most the scale it had — used on the passes
@@ -1084,6 +1095,12 @@ async function settleLandscapePages(token) {
   }
   if (token !== posterLayoutToken || !fitToPage) return;
   settle();
+  // A column shrunk to the floor still overflows: say which pages, so the
+  // author knows where a landscapebreak is due.
+  const crowded = [...previewWrapper.querySelectorAll(".course-page.landscape-fit")]
+    .map((pageBox, index) => ([...pageBox.querySelectorAll(".landscape-column-inner")].some(inner => Number(inner.dataset.scale) <= PAGE_FIT_MIN_SCALE && inner.getBoundingClientRect().height > inner.parentElement.clientHeight + 1) ? index + 1 : null))
+    .filter(Boolean);
+  if (crowded.length) status.textContent = `Poster : page${crowded.length > 1 ? "s" : ""} ${crowded.join(", ")} trop chargée${crowded.length > 1 ? "s" : ""}, ajoutez un saut de page (Poster)`;
 }
 
 function applyCompactMode() {
