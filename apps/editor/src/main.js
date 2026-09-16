@@ -39,10 +39,6 @@ const LANDSCAPE_MARGIN_PX = 16;
 const LANDSCAPE_CONTENT_HEIGHT_MM = PAGE_WIDTH_MM - (2 * LANDSCAPE_MARGIN_PX) / MM_TO_PX;
 const PREVIEW_GUTTER_PX = 64;
 const PAGE_FIT_MIN_SCALE = 0.35;
-// Poster without a columnbreak marker: each page (what lies between two
-// landscapebreaks) is laid out by itself into this many balanced columns
-// (front matter `poster-columns` overrides).
-const POSTER_COLUMNS_DEFAULT = 3;
 const RHYTHM_FIT_MIN_SCALE = 0.4;
 const GRID_FIT_MIN_SCALE = 0.45;
 const app = document.querySelector("#app");
@@ -757,11 +753,7 @@ function buildLandscapeStructure() {
   // never appear in the final DOM. `preview` itself stays attached (but
   // hidden) so getElementById lookups in drawPending keep working on the next
   // render pass, before its content has been redistributed into page boxes.
-  const nodes = [...preview.childNodes];
-  // A columnbreak makes the Poster layout manual; a landscapebreak alone
-  // only forces a new page in the automatic flow.
-  hasPosterMarkers = nodes.some(node => node.nodeType === 1 && node.classList.contains("column-break"));
-  const pages = splitByMarker(nodes, "landscape-page-break");
+  const pages = splitByMarker([...preview.childNodes], "landscape-page-break");
   preview.classList.remove("landscape-fit");
   preview.innerHTML = "";
   preview.style.display = "none";
@@ -769,18 +761,6 @@ function buildLandscapeStructure() {
   previewWrapper.append(preview);
   previewWrapper.style.height = "";
 
-  if (!hasPosterMarkers) {
-    // Everything in the first of N columns for now, at the width a column
-    // will have: once the notation is engraved at that width, the content
-    // is measured and flowed into columns and pages (autoPaginatePoster).
-    // Measured in the second column when there is one: it is the narrower
-    // kind (left padding and rule), so nothing measured there can come out
-    // taller once moved to the first.
-    const columns = Array.from({ length: docSettings.posterColumns }, () => []);
-    columns[Math.min(1, columns.length - 1)] = nodes;
-    previewWrapper.append(landscapePage(columns));
-    return;
-  }
   pages.forEach(pageNodes => {
     previewWrapper.append(landscapePage(splitByMarker(pageNodes, "column-break")));
   });
@@ -819,108 +799,10 @@ function notationSettled(timeoutMs = 10_000) {
   });
 }
 
-// Poster without a columnbreak: lays the content of the single measuring
-// column (see buildLandscapeStructure) out by itself. A page is what lies
-// between two landscapebreaks — never more pages than the author asked
-// for — and its blocks, kept whole, are spread over balanced columns that
-// are then shrunk to the page height; a heading never ends a column. Every
-// block is measured at its final width already, so nothing reflows when it
-// moves.
-let hasPosterMarkers = false;
-let posterMeasuring = false;
+// The fit of the Poster pages in progress: print waits for it, and a
+// newer render (a higher token) cancels an older one.
 let posterLayoutToken = 0;
 let posterLayoutReady = Promise.resolve();
-
-function autoPaginatePoster() {
-  const token = ++posterLayoutToken;
-  posterLayoutReady = (async () => {
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    await notationSettled();
-    await document.fonts.ready;
-    if (token !== posterLayoutToken || !fitToPage) return;
-    const measuring = [...previewWrapper.querySelectorAll(".course-page.landscape-fit .landscape-column-inner")].find(inner => inner.childNodes.length);
-    if (!measuring) return;
-    const nodes = [...measuring.childNodes].filter(node => node.nodeType === 1 || (node.nodeType === 3 && node.textContent.trim()));
-    if (!nodes.length) return;
-    // Natural sizes, at the column's own width: whatever fitted the
-    // measuring page meanwhile (a resize event at load) is undone, and the
-    // notation given time to re-engrave at that width. A column is only
-    // ever widened afterwards, which makes nothing taller.
-    const measuringPage = measuring.closest(".course-page.landscape-fit");
-    posterMeasuring = true;
-    for (const element of [measuringPage, measuring]) {
-      element.style.transform = "";
-      element.style.width = "";
-      element.style.height = "";
-    }
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    await notationSettled();
-    posterMeasuring = false;
-    if (token !== posterLayoutToken || !fitToPage) return;
-    const base = measuring.getBoundingClientRect().top;
-    const tops = nodes.map(node => (node.nodeType === 1 ? node.getBoundingClientRect().top : base) - base);
-    const total = measuring.scrollHeight;
-    const heights = tops.map((top, index) => Math.max(0, (index + 1 < tops.length ? tops[index + 1] : total) - top));
-    const isHeading = node => node.nodeType === 1 && /^H[1-6]$/.test(node.tagName);
-    const isPageBreak = node => node.nodeType === 1 && node.classList.contains("landscape-page-break");
-    const perPage = docSettings.posterColumns;
-    // Units that stay together: a heading (or several) and the block it
-    // titles. A landscapebreak closes the page.
-    const pages = [[]];
-    nodes.forEach((node, index) => {
-      if (isPageBreak(node)) {
-        node.remove();
-        if (pages.at(-1).length) pages.push([]);
-        return;
-      }
-      const units = pages.at(-1);
-      const last = units.at(-1);
-      if (last && last.headingOnly) {
-        last.nodes.push(node);
-        last.height += heights[index];
-        last.headingOnly = isHeading(node);
-      } else {
-        units.push({ nodes: [node], height: heights[index], headingOnly: isHeading(node) });
-      }
-    });
-    if (!pages.at(-1).length) pages.pop();
-    if (token !== posterLayoutToken || !fitToPage) return;
-    previewWrapper.querySelectorAll(".course-page.landscape-fit").forEach(pageBox => pageBox.remove());
-    for (const units of pages) previewWrapper.append(landscapePage(balancedColumns(units, perPage).map(column => column.flatMap(unit => unit.nodes))));
-    await settleLandscapePages(token);
-  })();
-  return posterLayoutReady;
-}
-
-// Splits units, in order, into `count` columns whose tallest is as short
-// as possible (a binary search on that height, columns filled greedily):
-// the page's columns come out about as full as each other, and are then
-// shrunk together by rescaleLandscapeColumns. Empty columns pad the end.
-function balancedColumns(units, count) {
-  const fill = limit => {
-    const columns = [[]];
-    let used = 0;
-    for (const unit of units) {
-      if (columns.at(-1).length && used + unit.height > limit) {
-        columns.push([]);
-        used = 0;
-      }
-      columns.at(-1).push(unit);
-      used += unit.height;
-    }
-    return columns;
-  };
-  let low = Math.max(0, ...units.map(unit => unit.height));
-  let high = units.reduce((sum, unit) => sum + unit.height, 0);
-  while (high - low > 1) {
-    const middle = (low + high) / 2;
-    if (fill(middle).length <= count) high = middle;
-    else low = middle;
-  }
-  const columns = fill(high);
-  while (columns.length < count) columns.push([]);
-  return columns;
-}
 
 // `noGrow`: a column keeps at most the scale it had — used on the passes
 // that follow a re-engraving, since a scale that grew would narrow the
@@ -1052,13 +934,9 @@ function applyPageFit() {
   }
 
   buildLandscapeStructure();
-  if (hasPosterMarkers) {
-    rescaleLandscapeColumns();
-    fitPosterPageToViewport();
-    posterLayoutReady = settleLandscapePages(++posterLayoutToken);
-  } else {
-    autoPaginatePoster();
-  }
+  rescaleLandscapeColumns();
+  fitPosterPageToViewport();
+  posterLayoutReady = settleLandscapePages(++posterLayoutToken);
 }
 
 // Fits the landscape columns once their content has its final size: fonts
@@ -1207,7 +1085,6 @@ function refreshDocSettings(data) {
     // from another SoundFont first, the app's banks filling in what it lacks.
     samples: !/^(off|non|false|0|synth)$/i.test((data.samples ?? "").trim()),
     soundfont: (data.soundfont ?? "").trim() || null,
-    posterColumns: Math.min(4, Math.max(1, Number(/(\d)/.exec(data["poster-columns"] ?? "")?.[1]) || POSTER_COLUMNS_DEFAULT)),
   };
   setSampler({ enabled: docSettings.samples, urls: docSettings.soundfont ? [new URL(docSettings.soundfont, document.baseURI).href, ...DEFAULT_SOUNDFONT_URLS] : DEFAULT_SOUNDFONT_URLS });
 }
@@ -1416,10 +1293,8 @@ window.addEventListener("resize", () => {
       return;
     }
     if (fitToPage) {
-      // Auto-flowed pages are fixed A4 sheets: only their fit to the
-      // viewport depends on the window, and not while they are measured.
-      if (hasPosterMarkers) rescaleLandscapeColumns();
-      if (!posterMeasuring) fitPosterPageToViewport();
+      rescaleLandscapeColumns();
+      fitPosterPageToViewport();
     } else {
       renderPageBreaks();
     }
@@ -1599,8 +1474,8 @@ async function prepareHeaderQr() {
   status.textContent = "";
 }
 
-// Before printing: every notation block engraved, and the Poster pages laid
-// out when they are flowed automatically.
+// Before printing: every notation block engraved, and the Poster pages
+// fitted.
 async function previewSettled() {
   await notationSettled();
   await posterLayoutReady;

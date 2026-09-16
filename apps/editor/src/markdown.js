@@ -179,7 +179,7 @@ export function parseFrontMatter(source) {
 
 function renderHeader(data) {
   // `soundfont` is a playback setting, not something the reader needs in a pill.
-  const { title, artist, logo, qr, "logo-position": logoPosition, sounding, soundfont, "poster-columns": posterColumns, ...rest } = data;
+  const { title, artist, logo, qr, "logo-position": logoPosition, sounding, soundfont, ...rest } = data;
   const logoPositionClass = logoPosition === "left" ? " doc-header-top-left" : "";
   const pills = Object.entries(rest)
     .filter(([, value]) => value)

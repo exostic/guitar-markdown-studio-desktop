@@ -294,13 +294,10 @@ Without `tuning:` the front matter tuning is used.
 
 - ```` ```pagebreak ``` ```` page break.
 - ```` ```columnbreak ``` ```` column break inside a columns section.
-- ```` ```landscapebreak ``` ```` page break in Poster (landscape) mode. With no `columnbreak` in
-  the document, Poster mode lays each page out by itself: a page is what lies between two
-  `landscapebreak` (no marker: one page), its whole blocks are spread in order over 3 balanced
-  columns (front matter `poster-columns: 2`, 1–4), a heading never ends a column, and the
-  columns are shrunk together to the A4 landscape page — too much between two breaks means small
-  print, so add a break. A `columnbreak` makes the layout fully manual (`landscapebreak` = page,
-  `columnbreak` = column). Book mode is unaffected.
+- ```` ```landscapebreak ``` ```` page break in Poster (landscape) mode. The Poster is composed in the
+  Markdown: `landscapebreak` starts an A4 landscape page, `columnbreak` a column in the current
+  page, and each column is shrunk to the page height (no marker: one page, one column). A page
+  still overflowing at the smallest scale is reported in a toast. Book mode is unaffected.
 - ```` ```columns ``` ```` … ```` ```column ``` ```` … ```` ```endcolumns ``` ```` multi-column
   section; `column` separates columns, `endcolumns` closes the section.
 - ```` ```zoom 0.8 ``` ```` … ```` ```endzoom ``` ```` scales the content in between
