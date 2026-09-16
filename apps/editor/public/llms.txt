@@ -31,6 +31,10 @@ Optional extra parameters, combinable with any of the above:
 
 - `mode=web` (default, interactive, audio playback), `mode=book` (A4 pages), `mode=poster`
   (landscape, fit to page).
+- `?enc=<base64url>` is a password-protected document (AES-256-GCM over the lz-string bytes, key from
+  PBKDF2-SHA-256; layout: version byte, 16-byte salt, 12-byte IV, ciphertext); the app asks for the
+  password. Produced by "Mot de passe de partage…" in the Partager menu; an agent should use `?src=`
+  or `?b64=` instead.
 - `view=only` hides the Markdown editor and shows the rendered lesson only.
 - `edit=hide` hides the "edit" button in view-only mode; `print=hide` hides the print buttons.
 

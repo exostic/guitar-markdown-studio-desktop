@@ -385,6 +385,9 @@ button:focus-visible,
   font-weight: 600;
   color: var(--text-dim);
 }
+.unseal-error {
+  color: #fca5a5;
+}
 .drive-field input {
   font: inherit;
   font-size: 0.85rem;

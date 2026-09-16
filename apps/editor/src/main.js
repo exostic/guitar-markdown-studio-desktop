@@ -15,6 +15,7 @@ import { destroyAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPr
 import { parseStaff } from "./blockOptions.js";
 import { downloadFile, getDriveConfig, listMarkdownFiles, setDriveConfig, shareFile, signOut as driveSignOut, uploadFile } from "./drive.js";
 import { shortenUrl } from "./shortlink.js";
+import { sealText, sealingAvailable, unsealText } from "./sealed.js";
 import LZString from "lz-string";
 
 const { compressToEncodedURIComponent, decompressFromEncodedURIComponent } = LZString;
@@ -94,8 +95,9 @@ app.innerHTML = `
         <button id="share-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false">Partager ▾</button>
         <div class="dropdown-menu" id="share-menu" role="menu" hidden>
           <button id="share-btn" type="button">Copier un lien de partage</button>
-          <button type="button" data-drive="share">Partager sur Drive avec…</button>
           <button id="email-btn" type="button">Envoyer par e-mail…</button>
+          <button id="share-password-btn" type="button">Mot de passe de partage…</button>
+          <button type="button" data-drive="share">Partager sur Drive avec…</button>
         </div>
       </span>
       <button id="print" class="primary">Imprimer / PDF</button>
@@ -104,6 +106,27 @@ app.innerHTML = `
   <section class="workspace">
     <button id="edit-toggle" class="edit-toggle" type="button" hidden>✎ Éditer</button>
     <div class="insert-backdrop" id="insert-backdrop" hidden></div>
+    <div class="track-picker drive-settings" id="share-password" role="dialog" aria-modal="true" hidden>
+      <div class="insert-menu-heading">Partager</div>
+      <h2 class="track-picker-title">Mot de passe de partage</h2>
+      <p class="drive-help">Avec un mot de passe, le cours est chiffré dans le lien (AES-256, dans votre navigateur) : le lien, le raccourcisseur et le message ne transportent que des données illisibles, et le destinataire doit saisir le mot de passe pour ouvrir le cours. Communiquez-le lui par un autre canal. Il vaut pour les prochains liens copiés ou envoyés.</p>
+      <label class="drive-field">Mot de passe<input type="password" id="share-password-input" autocomplete="off" placeholder="vide : lien sans mot de passe"></label>
+      <div class="track-picker-actions">
+        <button type="button" id="share-password-cancel">Annuler</button>
+        <button type="button" id="share-password-clear">Sans mot de passe</button>
+        <button type="button" id="share-password-ok" class="primary">Protéger</button>
+      </div>
+    </div>
+    <div class="track-picker drive-settings" id="unseal-dialog" role="dialog" aria-modal="true" hidden>
+      <div class="insert-menu-heading">Cours protégé</div>
+      <h2 class="track-picker-title">Ce cours est protégé par un mot de passe</h2>
+      <p class="drive-help">Saisis le mot de passe que t'a donné l'auteur du cours. Il n'est envoyé nulle part : le cours est déchiffré ici, dans ton navigateur.</p>
+      <label class="drive-field">Mot de passe<input type="password" id="unseal-input" autocomplete="off"></label>
+      <p class="drive-help unseal-error" id="unseal-error" hidden>Mot de passe incorrect.</p>
+      <div class="track-picker-actions">
+        <button type="button" id="unseal-ok" class="primary">Ouvrir</button>
+      </div>
+    </div>
     <div class="track-picker drive-picker" id="drive-picker" role="dialog" aria-modal="true" hidden>
       <div class="insert-menu-heading">Google Drive</div>
       <h2 class="track-picker-title">Ouvrir un cours</h2>
@@ -1421,16 +1444,57 @@ function buildHeaderQrUrl() {
   return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
 }
 
-// The share link, as a short alias when TinyURL answers, the full link
-// otherwise. Resolves to { url, short }.
+// Password for the next share links (kept for the session only).
+let sharePassword = "";
+const sharePasswordButton = document.querySelector("#share-password-btn");
+
+function refreshSharePasswordLabel() {
+  sharePasswordButton.textContent = sharePassword ? "🔒 Mot de passe de partage (actif)…" : "Mot de passe de partage…";
+}
+
+sharePasswordButton.addEventListener("click", () => {
+  const dialog = document.querySelector("#share-password");
+  const input = document.querySelector("#share-password-input");
+  input.value = sharePassword;
+  showModal(dialog);
+  input.focus();
+  const finish = value => {
+    if (value !== null) sharePassword = value;
+    refreshSharePasswordLabel();
+    hideModal(dialog);
+    status.textContent = value === null ? "" : sharePassword ? "Les prochains liens seront protégés par mot de passe" : "Liens sans mot de passe";
+  };
+  document.querySelector("#share-password-ok").onclick = () => finish(input.value);
+  document.querySelector("#share-password-clear").onclick = () => finish("");
+  document.querySelector("#share-password-cancel").onclick = () => finish(null);
+  insertBackdrop.onclick = () => finish(null);
+  input.onkeydown = event => { if (event.key === "Enter") finish(input.value); };
+});
+
+// The share link for the Web view: sealed under the share password when
+// one is set, and as a short alias when TinyURL answers, the full link
+// otherwise. Resolves to { url, short, sealed }.
 async function shareLink() {
-  const full = buildShareUrl("web");
+  let full = buildShareUrl("web");
+  const sealed = Boolean(sharePassword);
+  if (sealed) {
+    if (!sealingAvailable()) throw new Error("Chiffrement indisponible dans ce navigateur (page non sécurisée ?).");
+    const params = new URLSearchParams(new URL(full).search);
+    params.delete("doc");
+    params.set("enc", await sealText(editor.value, sharePassword));
+    full = `${window.location.origin}${window.location.pathname}?${params}`;
+  }
   try {
-    return { url: await shortenUrl(full), short: true };
+    return { url: await shortenUrl(full), short: true, sealed };
   } catch (error) {
     console.warn("[share] lien court impossible, lien complet utilisé", error);
-    return { url: full, short: false };
+    return { url: full, short: false, sealed };
   }
+}
+
+function linkStatus(link, done) {
+  const kind = link.short ? "lien court" : "lien court indisponible";
+  return `${done} (${kind}${link.sealed ? ", protégé par mot de passe" : ""})`;
 }
 
 shareButton.addEventListener("click", async () => {
@@ -1443,16 +1507,21 @@ shareButton.addEventListener("click", async () => {
   if (navigator.clipboard?.write && typeof ClipboardItem === "function" && ClipboardItem.supports?.("text/plain") !== false) {
     try {
       await navigator.clipboard.write([new ClipboardItem({ "text/plain": pending.then(link => new Blob([link.url], { type: "text/plain" })) })]);
-      const { short } = await pending;
-      status.textContent = short ? "Lien court copié" : "Lien copié (lien court indisponible)";
+      status.textContent = linkStatus(await pending, "Lien copié");
       return;
     } catch (error) {
       console.warn("[share] ClipboardItem impossible, copie classique", error);
     }
   }
-  const { url, short } = await pending;
-  const copied = await copyToClipboard(url);
-  status.textContent = copied ? (short ? "Lien court copié" : "Lien copié (lien court indisponible)") : "Erreur de copie";
+  let link;
+  try {
+    link = await pending;
+  } catch (error) {
+    status.textContent = error.message;
+    return;
+  }
+  const copied = await copyToClipboard(link.url);
+  status.textContent = copied ? linkStatus(link, "Lien copié") : "Erreur de copie";
 });
 
 // "Envoyer par e-mail…": the mail client opens (new tab on the web) on a
@@ -1469,7 +1538,7 @@ function mailtoFits(mailto) {
   return encodeURIComponent(mailto).length < MAILTO_LIMIT;
 }
 
-function emailMessage(link) {
+function emailMessage(link, { sealed = false } = {}) {
   const { data } = parseFrontMatter(editor.value);
   const title = data.title || "Cours de guitare";
   const subject = `🎸 Cours de guitare : ${title}`;
@@ -1478,7 +1547,7 @@ function emailMessage(link) {
   const outro = ["", "Bonne musique ! 🎸", ""];
   // The link alone on its line: a mailto body is plain text, mail clients
   // turn a bare URL into a link when they display the message.
-  const withLink = [...intro, "Ouvre-le ici, il s'affiche directement :", "", link, "", features, ...outro];
+  const withLink = [...intro, "Ouvre-le ici, il s'affiche directement :", "", link, "", ...(sealed ? ["Le cours est protégé : je te communique le mot de passe séparément.", ""] : []), features, ...outro];
   const paste = [
     ...intro,
     `Pour le lire, l'écouter et l'imprimer : ouvre https://gms.exostic.com, efface l'exemple (la corbeille du panneau Markdown) et colle le texte qui suit le trait ci-dessous. ${features}`,
@@ -1491,11 +1560,11 @@ function emailMessage(link) {
 
 async function shareByEmail() {
   status.textContent = "Préparation du lien…";
-  const { url: link, short } = await shareLink();
-  const message = emailMessage(link);
+  const link = await shareLink();
+  const message = emailMessage(link.url, { sealed: link.sealed });
   const mailtoFor = body => `mailto:?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(body)}`;
   let mailto = mailtoFor(message.withLink);
-  let note = short ? "Message prêt dans ta messagerie, avec le lien du cours" : "Message prêt dans ta messagerie, avec le lien complet du cours";
+  let note = linkStatus(link, "Message prêt dans ta messagerie");
   if (!mailtoFits(mailto)) {
     const copied = await copyToClipboard(editor.value);
     if (!copied) throw new Error("Lien court indisponible, cours trop long pour un e-mail et copie impossible : partage-le par Drive.");
@@ -1827,6 +1896,7 @@ async function loadFromQueryParams() {
   const doc = params.get("doc");
   const b64 = params.get("b64");
   const src = params.get("src");
+  const enc = params.get("enc");
   const requestedMode = VIEW_MODE_PARAM[params.get("mode")] ?? "web";
   viewOnly = params.get("view") === "only";
   hideEditButton = params.get("edit") === "hide";
@@ -1857,8 +1927,47 @@ async function loadFromQueryParams() {
       status.textContent = "Erreur de chargement";
       console.error("Impossible de charger le document distant :", error);
     }
+  } else if (enc) {
+    setViewMode(requestedMode);
+    await openSealedDocument(enc);
+    return;
   }
   setViewMode(requestedMode);
+}
+
+// A password-protected link: ask for the password until the course opens.
+async function openSealedDocument(enc) {
+  const dialog = document.querySelector("#unseal-dialog");
+  const input = document.querySelector("#unseal-input");
+  const errorLine = document.querySelector("#unseal-error");
+  editor.value = "";
+  update();
+  showModal(dialog);
+  insertBackdrop.onclick = null;
+  input.focus();
+  const attempt = async () => {
+    errorLine.hidden = true;
+    if (!input.value) return;
+    status.textContent = "Déchiffrement…";
+    try {
+      const text = await unsealText(enc, input.value);
+      if (text === null) {
+        errorLine.hidden = false;
+        status.textContent = "";
+        input.select();
+        return;
+      }
+      hideModal(dialog);
+      editor.value = text;
+      update();
+      status.textContent = "";
+    } catch (error) {
+      status.textContent = error.message;
+      console.error("[share] lien protégé :", error);
+    }
+  };
+  document.querySelector("#unseal-ok").onclick = attempt;
+  input.onkeydown = event => { if (event.key === "Enter") attempt(); };
 }
 
 loadFromQueryParams();
