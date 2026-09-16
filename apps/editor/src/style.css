@@ -1086,6 +1086,19 @@ button:focus-visible,
   font-size: 0.6rem;
   text-align: center;
 }
+/* Stand-in shown while the course is too long for a QR of the full link:
+   the real code arrives at print time with a short link. Never printed. */
+.doc-header-qr-placeholder {
+  box-sizing: border-box;
+  border: 1px dashed var(--doc-muted);
+  border-radius: 4px;
+  opacity: 0.6;
+}
+@media print {
+  .doc-header-qr-pending {
+    display: none;
+  }
+}
 .course-page img {
   max-width: 100%;
   height: auto;

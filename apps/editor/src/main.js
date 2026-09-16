@@ -1132,15 +1132,22 @@ function update() {
     // Front matter `qr: false` opts out entirely (e.g. for private/local docs).
     const headerTopEl = preview.querySelector(".doc-header-top");
     if (!webMode && headerTopEl && data.qr !== "false") {
-      const webUrl = buildHeaderQrUrl();
+      // The short link made for this exact content at the last print or
+      // export, else the full link (fine for a small course); a course too
+      // long for a QR code shows a placeholder until printing, when the
+      // short link is fetched — never while typing, so that the shortener
+      // only stores links that were actually handed out.
+      const webUrl = headerQr?.content === editor.value ? headerQr.url : buildHeaderQrUrl();
       const qrSvg = renderQrSvg(webUrl);
-      // A too-long document with no known hosted URL overflows what a QR
-      // code can hold — renderQrSvg returns "" in that case; skip quietly
-      // rather than show a broken code.
       if (qrSvg) {
         headerTopEl.insertAdjacentHTML(
           "beforeend",
           `<a class="doc-header-qr" href="${escapeHtml(webUrl)}" target="_blank" rel="noopener noreferrer" title="Ouvrir la version web"><span class="doc-header-qr-code">${qrSvg}</span><span class="doc-header-qr-label">Version web</span></a>`,
+        );
+      } else {
+        headerTopEl.insertAdjacentHTML(
+          "beforeend",
+          `<span class="doc-header-qr doc-header-qr-pending" title="Le QR code est généré à l'impression, avec un lien court"><span class="doc-header-qr-code doc-header-qr-placeholder"></span><span class="doc-header-qr-label">QR généré à l'impression</span></span>`,
         );
       }
     }
@@ -1356,8 +1363,32 @@ function setViewMode(mode) {
   update();
 }
 
+// The header QR of the last print or export: the short link and the
+// content it was made for.
+let headerQr = null;
+
+// Before printing or exporting: the short link of the content as it is
+// now (same content, same alias, so nothing new is stored for a reprint).
+// A course opened from a hosted URL keeps its ?src= link, which is short
+// already. Failures fall back to the full link or the placeholder.
+async function prepareHeaderQr() {
+  const { data } = parseFrontMatter(editor.value);
+  if (data.qr === "false" || currentSrcUrl) return;
+  if (headerQr?.content === editor.value) return;
+  const content = editor.value;
+  status.textContent = "Préparation du QR code…";
+  try {
+    const link = await shareLink();
+    if (link?.url) headerQr = { content, url: link.url };
+  } catch (error) {
+    console.warn("[qr] lien court impossible :", error);
+  }
+  status.textContent = "";
+}
+
 async function printAsMode(targetMode) {
   stopAll();
+  await prepareHeaderQr();
   const previousFitToPage = fitToPage;
   const previousWebMode = webMode;
   fitToPage = targetMode === "landscape";
@@ -1377,6 +1408,8 @@ async function printAsMode(targetMode) {
 
 async function printCurrent() {
   stopAll();
+  await prepareHeaderQr();
+  update();
   const { data } = parseFrontMatter(editor.value);
   if (window.gmsDesktop) {
     const result = await window.gmsDesktop.exportPdf(`${slugify(data.title)}.pdf`);
@@ -1524,10 +1557,10 @@ async function shareLink() {
   const sealed = Boolean(sharePassword);
   if (sealed) {
     if (!sealingAvailable()) throw new Error("Chiffrement indisponible dans ce navigateur (page non sécurisée ?).");
-    const params = new URLSearchParams(new URL(full).search);
+    const params = new URLSearchParams(new URL(full).hash.slice(1));
     params.delete("doc");
     params.set("enc", await sealText(editor.value, sharePassword));
-    full = `${window.location.origin}${window.location.pathname}?${params}`;
+    full = `${window.location.origin}${window.location.pathname}#${params}`;
   }
   try {
     return { url: await shortenUrl(full), short: true, sealed };
@@ -1784,6 +1817,8 @@ printButton.addEventListener("click", async () => {
     }
     return;
   }
+  await prepareHeaderQr();
+  update();
   if (window.gmsDesktop) {
     const result = await window.gmsDesktop.exportPdf(`${slugify(data.title)}.pdf`);
     if (result) status.textContent = "PDF exporté";
@@ -2065,6 +2100,11 @@ async function openSealedDocument(enc) {
 }
 
 loadFromQueryParams();
+// A link to the same page that differs only by its fragment does not
+// reload the page: when such a link carries a document, load it.
+window.addEventListener("hashchange", () => {
+  if (/(^#|&)(doc|enc|b64|src)=/.test(window.location.hash)) loadFromQueryParams();
+});
 
 // Installable web app: the service worker (production, web only) makes
 // Chrome offer "Installer" in the address bar; the Fichier menu offers it

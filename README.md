@@ -45,7 +45,7 @@ qr: false
 - `title`, `artist` et les autres champs (`difficulty`, `tempo`, `time`, `capo`, `tuning`, …) s'affichent en pastilles sous le titre.
 - `logo` : remplace le logo par défaut de l'en-tête par une image externe (URL). Sans ce champ, aucun logo ne s'affiche.
 - `logo-position` : `left` pour aligner le logo à gauche, sinon centré par défaut.
-- `qr` : mettre `qr: false` pour masquer le QR code d'en-tête (par défaut affiché en mode Livre/Poster, absent en mode Web).
+- `qr` : mettre `qr: false` pour masquer le QR code d'en-tête (par défaut affiché en mode Livre/Poster, absent en mode Web). Le QR pointe vers la version web du cours : lien complet quand il tient dans un QR, sinon un cadre « QR généré à l'impression » dans l'aperçu, et au moment d'imprimer ou d'exporter en PDF l'application demande le lien court du contenu tel qu'il est (même contenu, même alias : réimprimer ne crée rien) et insère le QR définitif. Un cours ouvert par `?src=` garde ce lien, déjà court.
 - `key` : tonalité du morceau (`G`, `Em`, `F# minor`, `Sol majeur`). Sert à épeler correctement les accords transposés (bémols en Fa, dièses en Sol…).
 - `transpose` : `+2`, `-3`… décale tous les **noms d'accords** des blocs `chords`, `grid`, `song` et les annotations des tablatures. Les diagrammes de gamme, tableaux de tonalité et cercle des quintes ne sont jamais réécrits.
 - `capo` + `sounding: true` : affiche entre parenthèses l'accord réellement entendu (« Am (Cm) » avec un capo en 3) sur les diagrammes d'accords et dans les grilles.

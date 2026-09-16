@@ -8,7 +8,9 @@ test("scelle et descelle un cours avec le bon mot de passe", async () => {
   const sealed = await sealText(course, "guitare 2026");
   assert.match(sealed, /^[A-Za-z0-9_-]+$/, "base64url, sûr dans une URL");
   assert.equal(await unsealText(sealed, "guitare 2026"), course);
-  assert.notEqual(await sealText(course, "guitare 2026"), sealed, "sel et vecteur aléatoires");
+  assert.equal(await sealText(course, "guitare 2026"), sealed, "même cours, même mot de passe : mêmes octets, donc même lien");
+  assert.notEqual(await sealText(course + "\n", "guitare 2026"), sealed, "un autre texte donne un autre scellé");
+  assert.notEqual(await sealText(course, "autre"), sealed, "un autre mot de passe aussi");
 });
 
 test("mauvais mot de passe → null, lien abîmé → erreur", async () => {

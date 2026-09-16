@@ -32,11 +32,21 @@ export function sealingAvailable() {
   return Boolean(subtle());
 }
 
+// Salt and IV derived from the password and the text rather than drawn
+// at random: the same course under the same password always seals to the
+// same bytes, so its link (and the short alias made from it) is stable
+// and a reprint stores nothing new. A different text gives a different
+// salt, hence a different key: the IV is never reused under one key.
+async function deterministicBytes(label, password, text, length) {
+  const digest = await subtle().digest("SHA-256", new TextEncoder().encode(`${label}\n${password.normalize("NFKC")}\n${text}`));
+  return new Uint8Array(digest).subarray(0, length);
+}
+
 // Resolves to the `enc` value: version byte, salt, iv, ciphertext.
 export async function sealText(text, password) {
   if (!password) throw new Error("Mot de passe vide.");
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+  const salt = await deterministicBytes("gms-salt", password, text, SALT_BYTES);
+  const iv = await deterministicBytes("gms-iv", password, text, IV_BYTES);
   const key = await deriveKey(password, salt, "encrypt");
   const plain = LZString.compressToUint8Array(text);
   const sealed = new Uint8Array(await subtle().encrypt({ name: "AES-GCM", iv }, key, plain));
