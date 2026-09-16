@@ -905,8 +905,12 @@ function rescaleLandscapeColumns({ noGrow = false } = {}) {
     // Measure at the true physical landscape width (297mm), not whatever width the
     // responsive on-screen preview happens to be at — text reflow depends on width,
     // so measuring at a shrunk viewport width would compute a scale that doesn't
-    // match the actual print output.
+    // match the actual print output. The fit to a small screen (a transform and
+    // shrunk sizes, see fitPosterPageToViewport) is undone meanwhile too: the
+    // column widths read below are in the page's own pixels.
     pageBox.style.width = `${PAGE_HEIGHT_MM * MM_TO_PX}px`;
+    pageBox.style.height = "";
+    pageBox.style.transform = "";
     pageBox.querySelectorAll(".landscape-column-inner").forEach(inner => {
       inner.style.transformOrigin = "top left";
       inner.style.transform = "";
@@ -956,6 +960,8 @@ function fitPosterPageToViewport() {
     pageBox.style.transform = "";
     pageBox.style.width = "";
     pageBox.style.height = "";
+    pageBox.style.marginRight = "";
+    pageBox.style.marginBottom = "";
   });
   if (!viewOnly || pageBoxes.length === 0) return;
   const naturalWidth = pageBoxes[0].offsetWidth;
@@ -967,11 +973,14 @@ function fitPosterPageToViewport() {
     Math.min(1, availableWidth / naturalWidth, availableHeight / naturalHeight),
   );
   if (scale >= 1) return;
+  // The page keeps its A4 size for layout (its columns must not reflow to
+  // a phone's width) and only looks smaller: the transform shrinks it, and
+  // negative margins give the space it no longer covers back to the flow.
   pageBoxes.forEach(pageBox => {
     pageBox.style.transformOrigin = "top left";
     pageBox.style.transform = `scale(${scale})`;
-    pageBox.style.width = `${naturalWidth * scale}px`;
-    pageBox.style.height = `${naturalHeight * scale}px`;
+    pageBox.style.marginRight = `${-naturalWidth * (1 - scale)}px`;
+    pageBox.style.marginBottom = `${-naturalHeight * (1 - scale)}px`;
   });
 }
 
