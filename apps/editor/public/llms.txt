@@ -35,7 +35,8 @@ Optional extra parameters, combinable with any of the above:
   (landscape, fit to page).
 - `?enc=<base64url>` is a password-protected document (AES-256-GCM over the lz-string bytes, key from
   PBKDF2-SHA-256; layout: version byte, 16-byte salt, 12-byte IV, ciphertext); the app asks for the
-  password. Produced by "Mot de passe de partage…" in the Partager menu; an agent should use `?src=`
+  password. Produced when "Copier un lien de partage" or "Envoyer par e-mail…" is answered with a
+  password (both ask first: "Sans mot de passe" / "Protéger"); an agent should use `?src=`
   or `?b64=` instead.
 - `?state={"ids":["<Drive file id>"],"action":"open"}` is what Google Drive's "Open with" menu sends;
   the app asks for a Google sign-in and reads that file (scopes drive.file + drive.install).

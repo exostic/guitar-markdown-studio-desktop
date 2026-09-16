@@ -71,7 +71,7 @@ app.innerHTML = `
   <header class="topbar">
     <div class="brand">
       <img class="brand-mark" src="${brandMarkUrl}" alt="" width="34" height="34" />
-      <div><h1>Guitar Markdown Studio</h1><p>Markdown → AST → alphaTab / SVGuitar · <a class="brand-link" href="llms.txt" target="_blank" rel="noopener" title="Référence de la syntaxe, lisible par les agents IA">Doc / agents IA</a> · <a class="brand-link" href="confidentialite/" target="_blank" rel="noopener">Confidentialité</a> · <a class="brand-link" href="conditions/" target="_blank" rel="noopener">Conditions</a></p></div>
+      <div><h1>Guitar Markdown Studio</h1><p><a class="brand-link" href="llms.txt" target="_blank" rel="noopener" title="Référence de la syntaxe, lisible par les agents IA">Doc / agents IA</a> · <a class="brand-link" href="confidentialite/" target="_blank" rel="noopener">Confidentialité</a> · <a class="brand-link" href="conditions/" target="_blank" rel="noopener">Conditions</a></p></div>
     </div>
     <div class="actions">
       <span id="status">Prêt</span>
@@ -97,7 +97,6 @@ app.innerHTML = `
         <div class="dropdown-menu" id="share-menu" role="menu" hidden>
           <button id="share-btn" type="button">Copier un lien de partage</button>
           <button id="email-btn" type="button">Envoyer par e-mail…</button>
-          <button id="share-password-btn" type="button">Mot de passe de partage…</button>
           <button type="button" data-drive="share">Partager sur Drive avec…</button>
         </div>
       </span>
@@ -119,7 +118,7 @@ app.innerHTML = `
     <div class="track-picker drive-settings" id="share-password" role="dialog" aria-modal="true" hidden>
       <div class="insert-menu-heading">Partager</div>
       <h2 class="track-picker-title">Mot de passe de partage</h2>
-      <p class="drive-help">Avec un mot de passe, le cours est chiffré dans le lien (AES-256, dans votre navigateur) : le lien, le raccourcisseur et le message ne transportent que des données illisibles, et le destinataire doit saisir le mot de passe pour ouvrir le cours. Le message envoyé par e-mail l'indique au destinataire ; pour un lien copié, communiquez-le vous-même. Il vaut pour les prochains liens copiés ou envoyés.</p>
+      <p class="drive-help">Avec un mot de passe, le cours est chiffré dans le lien (AES-256, dans votre navigateur) : le lien, le raccourcisseur et le message ne transportent que des données illisibles, et le destinataire doit saisir le mot de passe pour ouvrir le cours. Le message envoyé par e-mail l'indique au destinataire ; pour un lien copié, communiquez-le vous-même.</p>
       <label class="drive-field">Mot de passe<input type="password" id="share-password-input" autocomplete="off" placeholder="vide : lien sans mot de passe"></label>
       <div class="track-picker-actions">
         <button type="button" id="share-password-cancel">Annuler</button>
@@ -1525,44 +1524,46 @@ function buildHeaderQrUrl() {
   return `${window.location.origin}${window.location.pathname}#${params.toString()}`;
 }
 
-// Password for the next share links (kept for the session only).
-let sharePassword = "";
-const sharePasswordButton = document.querySelector("#share-password-btn");
+// Every "Copier un lien" and "Envoyer par e-mail…" first asks for a
+// password (Annuler / Sans mot de passe / Protéger); the last one used is
+// offered again for the session. `proceed(password)` runs inside the
+// button's own click, so the clipboard and the mail tab keep a user
+// gesture (Safari refuses to copy outside one).
+let lastSharePassword = "";
 
-function refreshSharePasswordLabel() {
-  sharePasswordButton.textContent = sharePassword ? "🔒 Mot de passe de partage (actif)…" : "Mot de passe de partage…";
-}
-
-sharePasswordButton.addEventListener("click", () => {
+function askSharePassword(proceed) {
   const dialog = document.querySelector("#share-password");
   const input = document.querySelector("#share-password-input");
-  input.value = sharePassword;
+  input.value = lastSharePassword;
   showModal(dialog);
   input.focus();
   const finish = value => {
-    if (value !== null) sharePassword = value;
-    refreshSharePasswordLabel();
     hideModal(dialog);
-    status.textContent = value === null ? "" : sharePassword ? "Les prochains liens seront protégés par mot de passe" : "Liens sans mot de passe";
+    if (value === null) {
+      status.textContent = "";
+      return;
+    }
+    lastSharePassword = value;
+    proceed(value);
   };
   document.querySelector("#share-password-ok").onclick = () => finish(input.value);
   document.querySelector("#share-password-clear").onclick = () => finish("");
   document.querySelector("#share-password-cancel").onclick = () => finish(null);
   insertBackdrop.onclick = () => finish(null);
   input.onkeydown = event => { if (event.key === "Enter") finish(input.value); };
-});
+}
 
-// The share link for the Web view: sealed under the share password when
-// one is set, and as a short alias when TinyURL answers, the full link
+// The share link for the Web view: sealed under `password` when one is
+// given, and as a short alias when the shortener answers, the full link
 // otherwise. Resolves to { url, short, sealed }.
-async function shareLink() {
+async function shareLink(password = "") {
   let full = buildShareUrl("web");
-  const sealed = Boolean(sharePassword);
+  const sealed = Boolean(password);
   if (sealed) {
     if (!sealingAvailable()) throw new Error("Chiffrement indisponible dans ce navigateur (page non sécurisée ?).");
     const params = new URLSearchParams(new URL(full).hash.slice(1));
     params.delete("doc");
-    params.set("enc", await sealText(editor.value, sharePassword));
+    params.set("enc", await sealText(editor.value, password));
     full = `${window.location.origin}${window.location.pathname}#${params}`;
   }
   try {
@@ -1578,11 +1579,13 @@ function linkStatus(link, done) {
   return `${done} (${kind}${link.sealed ? ", protégé par mot de passe" : ""})`;
 }
 
-shareButton.addEventListener("click", async () => {
+shareButton.addEventListener("click", () => askSharePassword(copyShareLink));
+
+async function copyShareLink(password) {
   // Always the Web view, regardless of what mode is currently active —
   // that's the format meant for sharing with a student.
   status.textContent = "Préparation du lien…";
-  const pending = shareLink();
+  const pending = shareLink(password);
   // Safari only writes to the clipboard within the click: a ClipboardItem
   // fed by a promise keeps the gesture while the alias is being made.
   if (navigator.clipboard?.write && typeof ClipboardItem === "function" && ClipboardItem.supports?.("text/plain") !== false) {
@@ -1603,7 +1606,7 @@ shareButton.addEventListener("click", async () => {
   }
   const copied = await copyToClipboard(link.url);
   status.textContent = copied ? linkStatus(link, "Lien copié") : "Erreur de copie";
-});
+}
 
 // "Envoyer par e-mail…": the mail client opens (new tab on the web) on a
 // friendly message with a link to the course, never the course itself:
@@ -1639,10 +1642,10 @@ function emailMessage(link, { sealed = false, password = "" } = {}) {
   return { subject, withLink: withLink.join("\n"), paste: paste.join("\n") };
 }
 
-async function shareByEmail() {
+async function shareByEmail(password) {
   status.textContent = "Préparation du lien…";
-  const link = await shareLink();
-  const message = emailMessage(link.url, { sealed: link.sealed, password: sharePassword });
+  const link = await shareLink(password);
+  const message = emailMessage(link.url, { sealed: link.sealed, password });
   const mailtoFor = body => `mailto:?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(body)}`;
   let mailto = mailtoFor(message.withLink);
   let note = linkStatus(link, "Message prêt dans ta messagerie");
@@ -1656,7 +1659,7 @@ async function shareByEmail() {
   else window.open(mailto, "_blank", "noopener");
   status.textContent = note;
 }
-document.querySelector("#email-btn").addEventListener("click", () => shareByEmail().catch(error => { status.textContent = error.message; console.error("[share]", error); }));
+document.querySelector("#email-btn").addEventListener("click", () => askSharePassword(password => shareByEmail(password).catch(error => { status.textContent = error.message; console.error("[share]", error); })));
 
 function syncViewStateFromUrl() {
   const params = urlParams();
