@@ -982,6 +982,9 @@ async function settleLandscapePages(token) {
 }
 
 function applyCompactMode() {
+  // The Web view-only page keeps its toolbar at the foot of the page (the
+  // class moves the preview to the header's row): only while it is view-only.
+  previewPane.classList.toggle("web-toolbar-footer", webMode && viewOnly);
   if (viewOnly) {
     // Read-only sharing link (?view=only): show nothing but the rendered
     // preview, full width, no headers or edit affordances — regardless of
