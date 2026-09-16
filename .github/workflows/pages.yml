@@ -26,6 +26,8 @@ jobs:
       - run: npm run build --workspace @gms/editor
         env:
           GMS_BASE_PATH: /
+          # Own link shortener (services/shortlink on Cloud Run); empty = TinyURL.
+          VITE_SHORTLINK_API: ${{ vars.SHORTLINK_API }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/editor/dist

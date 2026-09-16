@@ -14,7 +14,7 @@ import { setSampler } from "./audio/engine.js";
 import { destroyAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPro, onAlphaTabRendered, renderAlphaTabBlock } from "./alphatab.js";
 import { parseStaff } from "./blockOptions.js";
 import { downloadFile, getDriveConfig, getFileInfo, listMarkdownFiles, setDriveConfig, shareFile, signOut as driveSignOut, uploadFile } from "./drive.js";
-import { shortenUrl } from "./shortlink.js";
+import { OWN_SERVICE_KEY, ownServiceUrl, shortenUrl } from "./shortlink.js";
 import { sealText, sealingAvailable, unsealText } from "./sealed.js";
 import LZString from "lz-string";
 
@@ -147,9 +147,10 @@ app.innerHTML = `
     </div>
     <div class="track-picker drive-settings" id="drive-settings" role="dialog" aria-modal="true" hidden>
       <div class="insert-menu-heading">Google Drive</div>
-      <h2 class="track-picker-title">Réglages Google</h2>
+      <h2 class="track-picker-title">Réglages Google et liens courts</h2>
       <p class="drive-help">Tout se passe côté client, avec OAuth seulement : aucune clé ni secret. L'application ne demande que l'accès aux fichiers qu'elle a créés (portée <code>drive.file</code>), sans validation Google. Dans la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console Google Cloud</a>, activez l'API Drive et créez un identifiant OAuth de type <em>Application Web</em> avec, en origine JavaScript autorisée, l'adresse du site, et en URI de redirection autorisée <code>http://localhost:43110/</code> pour l'application de bureau.</p>
       <label class="drive-field">Identifiant client OAuth (public)<input type="text" id="drive-client-id" placeholder="xxxx.apps.googleusercontent.com" spellcheck="false"></label>
+      <label class="drive-field">Service de liens courts (vide : TinyURL)<input type="url" id="shortlink-api" placeholder="https://l.exostic.com" spellcheck="false"></label>
       <div class="track-picker-actions">
         <button type="button" id="drive-settings-cancel">Annuler</button>
         <button type="button" id="drive-settings-ok" class="primary">Enregistrer</button>
@@ -287,6 +288,7 @@ function hideModal(modal) {
 
 function openDriveSettings() {
   document.querySelector("#drive-client-id").value = getDriveConfig().clientId;
+  document.querySelector("#shortlink-api").value = ownServiceUrl();
   showModal(driveSettings);
   return new Promise(resolve => {
     const finish = saved => {
@@ -295,6 +297,13 @@ function openDriveSettings() {
     };
     document.querySelector("#drive-settings-ok").onclick = () => {
       setDriveConfig({ clientId: document.querySelector("#drive-client-id").value.trim() });
+      try {
+        const api = document.querySelector("#shortlink-api").value.trim();
+        if (api) localStorage.setItem(OWN_SERVICE_KEY, api);
+        else localStorage.removeItem(OWN_SERVICE_KEY);
+      } catch {
+        // storage unavailable
+      }
       finish(true);
     };
     document.querySelector("#drive-settings-cancel").onclick = () => finish(false);

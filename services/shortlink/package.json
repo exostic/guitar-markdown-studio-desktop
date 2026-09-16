@@ -1,0 +1,16 @@
+{
+  "name": "gms-shortlink",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Raccourcisseur de liens de Guitar Markdown Studio, pour Cloud Run + Firestore.",
+  "type": "module",
+  "main": "server.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.11.0"
+  }
+}

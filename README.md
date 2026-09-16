@@ -223,6 +223,31 @@ Sur le web, la connexion passe par la fenêtre Google dans la page ; dans l'appl
 
 **Ouvrir avec, depuis Drive.** Un fichier partagé par quelqu'un d'autre n'est pas visible par l'application tant que son propriétaire ne l'a pas ouvert avec elle (c'est la règle de `drive.file`, l'autorisation vaut par utilisateur et par fichier). Le menu **Ouvrir avec** de Drive règle cela : Drive appelle l'application avec `?state={"ids":["<id>"],"action":"open"}` et lui accorde l'accès au fichier ; l'application demande alors la connexion Google, lit le cours, et le fichier apparaît ensuite dans « Ouvrir (Drive) ». Si l'utilisateur peut modifier le fichier, « Enregistrer (Drive) » l'écrit en place ; sinon il est ouvert en lecture seule et « Enregistrer sous… » crée sa copie. Pour que l'application figure dans ce menu, dans la console Google Cloud, page de l'**API Google Drive**, onglet **Intégration à l'interface utilisateur Drive** : nom et icônes de l'application, **URL d'ouverture** `https://gms.exostic.com/`, **types MIME par défaut** `text/markdown` et `text/plain`, **extensions de fichier par défaut** `md` ; l'entrée apparaît dans le menu des utilisateurs qui ont autorisé l'application (portée `drive.install`).
 
+## Liens courts : votre propre service (Cloud Run)
+
+Par défaut, les liens de partage sont raccourcis par TinyURL, qui conserve donc le lien (et le cours qu'il contient) sans limite de durée. Le dossier `services/shortlink` est un remplaçant minuscule à héberger sur Google Cloud Run avec Firestore, dans les quotas gratuits (2 millions de requêtes et 360 000 Go·s par mois pour Cloud Run, 1 Go et 50 000 lectures par jour pour Firestore ; un compte de facturation doit être rattaché au projet, mais rien n'est facturé sous ces seuils). Le service ne raccourcit que les liens de l'application (pas de redirection ouverte), calcule l'alias à partir du lien (même lien, même alias) et limite les demandes par adresse.
+
+```
+POST /api/links   {"url": "https://gms.exostic.com/?doc=…"}   →  {"url": "https://l.exostic.com/Ab3dEf9"}
+GET  /Ab3dEf9                                                →  302 vers le lien
+```
+
+Déploiement, depuis le dossier du dépôt, avec le [SDK gcloud](https://cloud.google.com/sdk/docs/install) et le projet Google Cloud déjà utilisé pour OAuth :
+
+```sh
+gcloud config set project <id-du-projet>
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com firestore.googleapis.com
+gcloud firestore databases create --location=eur3          # une fois, base « (default) » en mode natif
+gcloud run deploy gms-shortlink --source services/shortlink --region europe-west1 --allow-unauthenticated \
+  --set-env-vars ALLOWED_ORIGINS=https://gms.exostic.com,PUBLIC_BASE_URL=https://l.exostic.com
+```
+
+`gcloud run deploy` affiche l'URL du service (`https://gms-shortlink-….run.app`). Pour des liens plus courts sur votre domaine, mappez un sous-domaine : `gcloud beta run domain-mappings create --service gms-shortlink --domain l.exostic.com --region europe-west1`, puis créez chez votre registrar l'enregistrement DNS indiqué (CNAME vers `ghs.googlehosted.com`). Sans domaine propre, mettez l'URL `run.app` dans `PUBLIC_BASE_URL`.
+
+Ensuite, indiquez l'adresse du service à l'application : soit dans **Fichier › Réglages Google…**, champ *Service de liens courts* (réglage local au navigateur), soit pour tout le monde au build, par la variable `VITE_SHORTLINK_API` (dans GitHub, *Settings › Secrets and variables › Actions › Variables*, créez `SHORTLINK_API` avec l'adresse : le workflow Pages la transmet). Si le service ne répond pas, l'application retombe sur TinyURL.
+
+En local : `cd services/shortlink && STORE=memory npm start` (port 8080, sans Firestore) et `npm test`.
+
 ## Importer un fichier Guitar Pro
 
 Le bouton **Importer** (ou **Ouvrir** sur le bureau) accepte aussi un fichier Guitar Pro (`.gp3`, `.gp4`, `.gp5`, `.gpx`, `.gp`). Le fichier est lu par alphaTab puis traduit et **ajouté en fin de document**, sous un titre au nom du morceau, sans toucher à ce qui est déjà écrit : chaque piste à six cordes devient un bloc `tab` avec `staff: tab et partition`, les mesures réparties sur des lignes d'au plus quatre mesures et une centaine de caractères, et ses propres lignes `tempo:`, `time:`, `tuning:`, `capo:` et `sound:`, pour se jouer et se graver comme dans le fichier. Un éditeur vide reçoit à la place un document complet, avec le front matter tiré du fichier.

@@ -24,8 +24,8 @@ Write the whole lesson as one Markdown document, then give the user ONE of these
    base64 (or use URL-safe base64: `-` and `_`, padding optional). Links get long
    (roughly 1.4 × the document size) but work for lessons of a few kilobytes.
 3. `https://gms.exostic.com/?doc=<lz-string compressToEncodedURIComponent(markdown)>` —
-   what the app's own "Copier un lien de partage" produces (behind a TinyURL alias when the service
-   answers); shortest self-contained link, needs the `lz-string` library.
+   what the app's own "Copier un lien de partage" produces (behind a short alias — the app's own
+   Cloud Run shortener from services/shortlink when configured, else TinyURL); shortest self-contained link, needs the `lz-string` library.
 
 Optional extra parameters, combinable with any of the above:
 
