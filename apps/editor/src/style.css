@@ -1711,6 +1711,7 @@ pre {
 /* Key chart */
 .key-chart-block {
   break-inside: avoid;
+  container-type: inline-size;
 }
 .key-chart {
   width: 100%;
@@ -1757,6 +1758,44 @@ pre {
   margin-top: 0.4rem;
   font-size: 0.82rem;
   color: var(--doc-muted);
+}
+/* Narrow block (a phone, a slim preview pane): the six columns don't fit,
+   so each degree becomes two lines — numeral, chord, seventh and function
+   on the first, the notes under the chord — and the header row goes. */
+@container (max-width: 520px) {
+  .key-chart thead {
+    display: none;
+  }
+  .key-chart tbody,
+  .key-chart tr,
+  .key-chart td {
+    display: block;
+  }
+  .key-chart tr {
+    display: grid;
+    grid-template-columns: 2.4rem max-content max-content 1fr;
+    column-gap: 0.6rem;
+    align-items: baseline;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--doc-line);
+  }
+  .key-chart td {
+    padding: 0;
+    border: 0;
+  }
+  .key-chart .key-degree {
+    display: none;
+  }
+  .key-chart .key-notes {
+    grid-column: 2 / -1;
+    font-size: 0.8rem;
+  }
+  .key-chart .key-function {
+    grid-column: -2 / -1;
+    grid-row: 1;
+    text-align: right;
+    font-size: 0.8rem;
+  }
 }
 
 /* Circle of fifths */
