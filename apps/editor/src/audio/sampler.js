@@ -24,7 +24,7 @@ export function isSamplerReady() {
 // none could be loaded; the engine keeps using its synthesized string for
 // the notes no bank covers.
 export function loadSampler(urls) {
-  const list = (Array.isArray(urls) ? urls : [urls]).filter(Boolean);
+  const list = [...new Set((Array.isArray(urls) ? urls : [urls]).filter(Boolean))];
   const key = list.join("\n");
   if (loadedKey === key) return Promise.all(banks.map(entry => entry.loading)).then(() => isSamplerReady());
   loadedKey = key;

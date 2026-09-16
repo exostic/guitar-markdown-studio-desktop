@@ -52,7 +52,7 @@ qr: false
 - `tuning` : `Standard`, `Drop D`, `DADGAD`, `Open G`, `Open D`, `Eb standard` ou une liste `D A D G B e`. Utilisé par les diagrammes de gamme, l'accordeur et la lecture audio.
 - `sound` : instrument de la lecture audio — `acoustic` (défaut), `electric` (guitare électrique claire) ou `distortion` (électrique saturée). Les mots français fonctionnent aussi (`électrique`, `saturé`).
 - `samples` : `off` pour jouer avec la corde synthétisée plutôt qu'avec les échantillons de guitare, chargés en arrière-plan (la synthèse reste utilisée tant qu'ils ne sont pas prêts). Le son `acoustic` vient d'une folk à cordes acier échantillonnée (« Acoustic Guitar » par Daindune, CC BY 3.0, mixée en mono, voir `apps/editor/public/samples/README.md`) ; l'électrique vient de la banque General MIDI livrée avec alphaTab.
-- `soundfont` : URL d'une autre SoundFont (`.sf2`, non compressée) jouée en priorité ; les banques de l'application complètent les programmes qu'elle n'a pas. Le fichier doit être servi avec CORS (le plus simple : à côté de l'application).
+- `soundfont` : URL d'une SoundFont (`.sf2`, non compressée) jouée en priorité, non affichée dans l'en-tête ; les banques de l'application complètent les programmes qu'elle n'a pas. Le fichier doit être servi avec CORS (le plus simple : à côté de l'application).
 - `tempo` : cliquer sur la pastille lance un métronome (mode Web).
 
 ## Tablatures
