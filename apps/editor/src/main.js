@@ -761,7 +761,9 @@ function buildLandscapeStructure() {
   // hidden) so getElementById lookups in drawPending keep working on the next
   // render pass, before its content has been redistributed into page boxes.
   const nodes = [...preview.childNodes];
-  hasPosterMarkers = nodes.some(node => node.nodeType === 1 && (node.classList.contains("landscape-page-break") || node.classList.contains("column-break")));
+  // A columnbreak makes the Poster layout manual; a landscapebreak alone
+  // only forces a new page in the automatic flow.
+  hasPosterMarkers = nodes.some(node => node.nodeType === 1 && node.classList.contains("column-break"));
   const pages = splitByMarker(nodes, "landscape-page-break");
   preview.classList.remove("landscape-fit");
   preview.innerHTML = "";
@@ -778,7 +780,7 @@ function buildLandscapeStructure() {
     // kind (left padding and rule), so nothing measured there can come out
     // taller once moved to the first.
     const columns = Array.from({ length: docSettings.posterColumns }, () => []);
-    columns[Math.min(1, columns.length - 1)] = pages.flat();
+    columns[Math.min(1, columns.length - 1)] = nodes;
     previewWrapper.append(landscapePage(columns));
     return;
   }
@@ -868,26 +870,39 @@ function autoPaginatePoster() {
     // (a tall tab after a short grid: better slightly smaller than a column
     // left almost blank).
     const stretch = (LANDSCAPE_CONTENT_HEIGHT_MM * MM_TO_PX) / POSTER_FILL_MAX;
-    const columns = [[]];
+    const isPageBreak = node => node.nodeType === 1 && node.classList.contains("landscape-page-break");
+    const perPage = docSettings.posterColumns;
+    // Pages of columns: a page is full after `perPage` columns, and a
+    // landscapebreak ends it early.
+    const pages = [[[]]];
+    const column = () => pages.at(-1).at(-1);
+    const newColumn = seed => {
+      if (pages.at(-1).length >= perPage) pages.push([]);
+      pages.at(-1).push(seed);
+    };
     let used = 0;
     nodes.forEach((node, index) => {
+      if (isPageBreak(node)) {
+        node.remove();
+        if (column().length || pages.at(-1).length > 1) pages.push([[]]);
+        used = 0;
+        return;
+      }
       const height = Math.max(0, heights[index]);
       const fits = used + height <= capacity || (used < capacity * 0.4 && used + height <= stretch);
-      if (columns.at(-1).length && !fits) {
+      if (column().length && !fits) {
         // A heading left at the bottom moves along with what it titles.
         const carried = [];
-        while (columns.at(-1).length && isHeading(columns.at(-1).at(-1))) carried.unshift(columns.at(-1).pop());
-        columns.push(carried);
+        while (column().length && isHeading(column().at(-1))) carried.unshift(column().pop());
+        newColumn(carried);
         used = carried.reduce((sum, item) => sum + heights[nodes.indexOf(item)], 0);
       }
-      columns.at(-1).push(node);
+      column().push(node);
       used += height;
     });
     if (token !== posterLayoutToken || !fitToPage) return;
-    const perPage = docSettings.posterColumns;
     previewWrapper.querySelectorAll(".course-page.landscape-fit").forEach(pageBox => pageBox.remove());
-    for (let i = 0; i < columns.length; i += perPage) {
-      const pageColumns = columns.slice(i, i + perPage);
+    for (const pageColumns of pages) {
       while (pageColumns.length < perPage) pageColumns.push([]);
       previewWrapper.append(landscapePage(pageColumns));
     }
