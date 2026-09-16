@@ -1414,6 +1414,21 @@ async function prepareHeaderQr() {
   status.textContent = "";
 }
 
+// Resolves once every notation block of the preview is engraved: alphaTab
+// lays out asynchronously after `update()`, and printing before it is
+// done would leave the tabs and staves blank. Gives up after a while so a
+// block alphaTab cannot draw never blocks the print.
+function previewSettled(timeoutMs = 10_000) {
+  return new Promise(resolve => {
+    const started = performance.now();
+    const check = () => {
+      if (!preview.querySelector(".alphatab-host:not([data-rendered])") || performance.now() - started > timeoutMs) resolve();
+      else setTimeout(check, 50);
+    };
+    check();
+  });
+}
+
 async function printAsMode(targetMode) {
   stopAll();
   await prepareHeaderQr();
@@ -1422,6 +1437,7 @@ async function printAsMode(targetMode) {
   fitToPage = targetMode === "landscape";
   webMode = false;
   update();
+  await previewSettled();
   const { data } = parseFrontMatter(editor.value);
   if (window.gmsDesktop) {
     const result = await window.gmsDesktop.exportPdf(`${slugify(data.title)}.pdf`);
@@ -1438,6 +1454,7 @@ async function printCurrent() {
   stopAll();
   await prepareHeaderQr();
   update();
+  await previewSettled();
   const { data } = parseFrontMatter(editor.value);
   if (window.gmsDesktop) {
     const result = await window.gmsDesktop.exportPdf(`${slugify(data.title)}.pdf`);
@@ -1851,6 +1868,7 @@ printButton.addEventListener("click", async () => {
   }
   await prepareHeaderQr();
   update();
+  await previewSettled();
   if (window.gmsDesktop) {
     const result = await window.gmsDesktop.exportPdf(`${slugify(data.title)}.pdf`);
     if (result) status.textContent = "PDF exporté";
