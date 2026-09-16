@@ -10,11 +10,13 @@ const DEFAULT_CLIENT_ID = "1080726648569-q66a774j7fdtk266slf7poar6snphp0r.apps.g
 const TOKEN_KEY = "gms:drive-token";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
-// drive.file only: Google does not treat it as sensitive, so there is no
-// "unverified app" warning and no verification. The app sees and writes
-// only the files it created or saved itself; a course written elsewhere is
-// imported once, then saved to Drive, after which it stays visible.
-const SCOPES = "https://www.googleapis.com/auth/drive.file";
+// drive.file and drive.install only: Google treats neither as sensitive,
+// so there is no "unverified app" warning and no verification. The app
+// sees and writes only the files it created, saved or was asked to open
+// (Drive's "Ouvrir avec" menu, which drive.install adds the app to); a
+// course written elsewhere is imported once, then saved to Drive, after
+// which it stays visible.
+const SCOPES = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.install";
 
 function storage(key, value) {
   try {
@@ -125,6 +127,13 @@ export async function listMarkdownFiles() {
   const params = new URLSearchParams({ q: query, orderBy: "modifiedTime desc", pageSize: "50", fields: "files(id,name,modifiedTime)", spaces: "drive" });
   const response = await driveFetch(`${DRIVE_API}/files?${params}`);
   return (await response.json()).files ?? [];
+}
+
+// Name and permission of one file the app may see.
+export async function getFileInfo(id) {
+  const response = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(id)}?fields=id,name,capabilities/canEdit`);
+  const info = await response.json();
+  return { id: info.id, name: info.name, canEdit: info.capabilities?.canEdit !== false };
 }
 
 export async function downloadFile(id) {

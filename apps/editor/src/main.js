@@ -13,7 +13,7 @@ import { parseSound } from "./audio/sound.js";
 import { setSampler } from "./audio/engine.js";
 import { destroyAlphaTabBlocks, guitarProMarkdown, isGuitarProFile, loadGuitarPro, onAlphaTabRendered, renderAlphaTabBlock } from "./alphatab.js";
 import { parseStaff } from "./blockOptions.js";
-import { downloadFile, getDriveConfig, listMarkdownFiles, setDriveConfig, shareFile, signOut as driveSignOut, uploadFile } from "./drive.js";
+import { downloadFile, getDriveConfig, getFileInfo, listMarkdownFiles, setDriveConfig, shareFile, signOut as driveSignOut, uploadFile } from "./drive.js";
 import { shortenUrl } from "./shortlink.js";
 import { sealText, sealingAvailable, unsealText } from "./sealed.js";
 import LZString from "lz-string";
@@ -107,6 +107,15 @@ app.innerHTML = `
   <section class="workspace">
     <button id="edit-toggle" class="edit-toggle" type="button" hidden>✎ Éditer</button>
     <div class="insert-backdrop" id="insert-backdrop" hidden></div>
+    <div class="track-picker drive-settings" id="drive-open" role="dialog" aria-modal="true" hidden>
+      <div class="insert-menu-heading">Google Drive</div>
+      <h2 class="track-picker-title">Ouvrir le cours depuis Google Drive</h2>
+      <p class="drive-help" id="drive-open-help">Google Drive demande d'ouvrir un cours dans l'application. Connectez-vous avec votre compte Google pour le lire : l'application ne demande que l'accès aux fichiers qu'elle a créés ou qu'on lui a demandé d'ouvrir.</p>
+      <div class="track-picker-actions">
+        <button type="button" id="drive-open-cancel">Plus tard</button>
+        <button type="button" id="drive-open-ok" class="primary">Ouvrir avec Google</button>
+      </div>
+    </div>
     <div class="track-picker drive-settings" id="share-password" role="dialog" aria-modal="true" hidden>
       <div class="insert-menu-heading">Partager</div>
       <h2 class="track-picker-title">Mot de passe de partage</h2>
@@ -1898,6 +1907,7 @@ async function loadFromQueryParams() {
   const b64 = params.get("b64");
   const src = params.get("src");
   const enc = params.get("enc");
+  const driveState = parseDriveState(params.get("state"));
   const requestedMode = VIEW_MODE_PARAM[params.get("mode")] ?? "web";
   viewOnly = params.get("view") === "only";
   hideEditButton = params.get("edit") === "hide";
@@ -1932,8 +1942,59 @@ async function loadFromQueryParams() {
     setViewMode(requestedMode);
     await openSealedDocument(enc);
     return;
+  } else if (driveState) {
+    setViewMode(requestedMode);
+    await openFromDriveUi(driveState);
+    return;
   }
   setViewMode(requestedMode);
+}
+
+// Drive's "Ouvrir avec" menu opens the app with ?state={"ids":[…],
+// "action":"open"} ("create" from its "Nouveau" menu, with a folderId);
+// Google grants the app access to those files for this user.
+function parseDriveState(text) {
+  if (!text) return null;
+  try {
+    const state = JSON.parse(text);
+    if (state.action === "open" && Array.isArray(state.ids) && state.ids.length) return { action: "open", id: String(state.ids[0]) };
+    if (state.action === "create") return { action: "create", folderId: state.folderId ?? null };
+  } catch {
+    // not Drive's state
+  }
+  return null;
+}
+
+// Google must be asked from a click (the sign-in opens a popup), so a
+// dialog explains and offers to open the file. Once read, the file
+// becomes the document's Drive file: "Enregistrer (Drive)" writes it
+// back when the person may edit it.
+async function openFromDriveUi(state) {
+  history.replaceState(null, "", window.location.pathname);
+  if (state.action === "create") {
+    status.textContent = "Nouveau cours : enregistrez-le sur Drive quand il est prêt";
+    return;
+  }
+  const dialog = document.querySelector("#drive-open");
+  showModal(dialog);
+  const accepted = await new Promise(resolve => {
+    document.querySelector("#drive-open-ok").onclick = () => resolve(true);
+    document.querySelector("#drive-open-cancel").onclick = () => resolve(false);
+    insertBackdrop.onclick = () => resolve(false);
+  });
+  hideModal(dialog);
+  if (!accepted) return;
+  try {
+    status.textContent = "Ouverture depuis Google Drive…";
+    const info = await getFileInfo(state.id);
+    editor.value = await downloadFile(state.id);
+    driveFile = info.canEdit ? { id: info.id, name: info.name } : null;
+    update();
+    status.textContent = info.canEdit ? `Ouvert depuis Drive · ${info.name}` : `Ouvert depuis Drive en lecture seule · ${info.name} (Enregistrer sous… pour votre copie)`;
+  } catch (error) {
+    status.textContent = `Impossible d'ouvrir ce cours : ${error.message}`;
+    console.error("[drive] ouverture depuis Drive :", error);
+  }
 }
 
 // A password-protected link: ask for the password until the course opens.

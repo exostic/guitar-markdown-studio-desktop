@@ -35,6 +35,8 @@ Optional extra parameters, combinable with any of the above:
   PBKDF2-SHA-256; layout: version byte, 16-byte salt, 12-byte IV, ciphertext); the app asks for the
   password. Produced by "Mot de passe de partage…" in the Partager menu; an agent should use `?src=`
   or `?b64=` instead.
+- `?state={"ids":["<Drive file id>"],"action":"open"}` is what Google Drive's "Open with" menu sends;
+  the app asks for a Google sign-in and reads that file (scopes drive.file + drive.install).
 - `view=only` hides the Markdown editor and shows the rendered lesson only.
 - `edit=hide` hides the "edit" button in view-only mode; `print=hide` hides the print buttons.
 
