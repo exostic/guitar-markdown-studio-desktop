@@ -109,7 +109,7 @@ app.innerHTML = `
     <div class="track-picker drive-settings" id="share-password" role="dialog" aria-modal="true" hidden>
       <div class="insert-menu-heading">Partager</div>
       <h2 class="track-picker-title">Mot de passe de partage</h2>
-      <p class="drive-help">Avec un mot de passe, le cours est chiffré dans le lien (AES-256, dans votre navigateur) : le lien, le raccourcisseur et le message ne transportent que des données illisibles, et le destinataire doit saisir le mot de passe pour ouvrir le cours. Communiquez-le lui par un autre canal. Il vaut pour les prochains liens copiés ou envoyés.</p>
+      <p class="drive-help">Avec un mot de passe, le cours est chiffré dans le lien (AES-256, dans votre navigateur) : le lien, le raccourcisseur et le message ne transportent que des données illisibles, et le destinataire doit saisir le mot de passe pour ouvrir le cours. Le message envoyé par e-mail l'indique au destinataire ; pour un lien copié, communiquez-le vous-même. Il vaut pour les prochains liens copiés ou envoyés.</p>
       <label class="drive-field">Mot de passe<input type="password" id="share-password-input" autocomplete="off" placeholder="vide : lien sans mot de passe"></label>
       <div class="track-picker-actions">
         <button type="button" id="share-password-cancel">Annuler</button>
@@ -1538,7 +1538,7 @@ function mailtoFits(mailto) {
   return encodeURIComponent(mailto).length < MAILTO_LIMIT;
 }
 
-function emailMessage(link, { sealed = false } = {}) {
+function emailMessage(link, { sealed = false, password = "" } = {}) {
   const { data } = parseFrontMatter(editor.value);
   const title = data.title || "Cours de guitare";
   const subject = `🎸 Cours de guitare : ${title}`;
@@ -1547,7 +1547,7 @@ function emailMessage(link, { sealed = false } = {}) {
   const outro = ["", "Bonne musique ! 🎸", ""];
   // The link alone on its line: a mailto body is plain text, mail clients
   // turn a bare URL into a link when they display the message.
-  const withLink = [...intro, "Ouvre-le ici, il s'affiche directement :", "", link, "", ...(sealed ? ["Le cours est protégé : je te communique le mot de passe séparément.", ""] : []), features, ...outro];
+  const withLink = [...intro, "Ouvre-le ici, il s'affiche directement :", "", link, "", ...(sealed ? [`Le cours est protégé par un mot de passe : ${password}`, ""] : []), features, ...outro];
   const paste = [
     ...intro,
     `Pour le lire, l'écouter et l'imprimer : ouvre https://gms.exostic.com, efface l'exemple (la corbeille du panneau Markdown) et colle le texte qui suit le trait ci-dessous. ${features}`,
@@ -1561,7 +1561,7 @@ function emailMessage(link, { sealed = false } = {}) {
 async function shareByEmail() {
   status.textContent = "Préparation du lien…";
   const link = await shareLink();
-  const message = emailMessage(link.url, { sealed: link.sealed });
+  const message = emailMessage(link.url, { sealed: link.sealed, password: sharePassword });
   const mailtoFor = body => `mailto:?subject=${encodeURIComponent(message.subject)}&body=${encodeURIComponent(body)}`;
   let mailto = mailtoFor(message.withLink);
   let note = linkStatus(link, "Message prêt dans ta messagerie");
